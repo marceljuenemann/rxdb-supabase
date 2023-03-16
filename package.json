@@ -34,6 +34,11 @@
     "cz": "cz",
     "semantic-release": "semantic-release"
   },
+  "dependencies": {
+    "@supabase/supabase-js": "^2.11.0",
+    "rxdb": "^14.3.6",
+    "rxjs": "^7.8.0"
+  },
   "devDependencies": {
     "@ryansonshine/commitizen": "^4.2.8",
     "@ryansonshine/cz-conventional-changelog": "^3.3.4",
