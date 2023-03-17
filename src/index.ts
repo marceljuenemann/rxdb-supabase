@@ -6,8 +6,8 @@ import { SupabaseClient } from '@supabase/supabase-js'
 import type { ReplicationOptions, ReplicationPullOptions, ReplicationPushOptions } from './rxdb-internal-types.js'
 
 import { pullHandler } from './pull.js'
+import { pushHandler } from './push.js'
 
-const POSTGRES_DUPLICATE_KEY_ERROR_CODE = '23505'
 
 /**
  * Checkpoints are used to store until which point the client and supabase have been
@@ -100,40 +100,4 @@ export function replicateSupabase<RxDocType>(options: SupabaseReplicationOptions
   // Starting the replication as soon as leadership has been decided.
   startReplicationOnLeaderShip(options.waitForLeadership, replicationState);
   return replicationState;
-}
-
-// TODO: maybe move to push.ts? Might not be needed, but rename this file to something nicer.
-// TODO: support larger batch sizes to enable bulk insertion.
-function pushHandler<T>(options: SupabaseReplicationOptions<T>): ReplicationPushOptions<T> {
-  return {
-    ...options.push,
-    batchSize: 1,
-    handler: async (rows: RxReplicationWriteToMasterRow<T>[]): Promise<WithDeleted<T>[]> => {
-      if (rows.length != 1) throw 'Invalid batch size'
-      const row = rows[0]
-     
-      console.log("Pushing changes...", row)
-
-      if (!row.assumedMasterState) {
-        console.log("Inserting x...")
-
-        const { error } = await options.supabaseClient.from('humans') // TODO: configurable
-          .insert(row.newDocumentState)
-
-        if (!error) {
-          console.log("Success!")
-          return []
-        }
-        if (error.code != POSTGRES_DUPLICATE_KEY_ERROR_CODE) console.error("error")
-
-        console.log("Conflict!")
-        // TODO: Fetch current master state and return
-        // TODO: Figure out what happens when we throw here? Would the caller have to do something?
-      } else {
-        throw 'Updating not supported yet'
-      }
-
-      return []
-    } 
-  }
 }
