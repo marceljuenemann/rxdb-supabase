@@ -12,8 +12,10 @@ Issues:
 Notes:
 
 * Replication ID and the problem around auth / user changes
+* _modified column
 * _deleted column
-* modified column
+  * Refer to cleanup plugin. TODO: Will that replicate though, no?
+  * TODO: allow to set to null for never delete case? That wouldn't allow for cleanup though
 
 
 

@@ -2,11 +2,13 @@ import process from "process"
 import { SupabaseClient, createClient } from "@supabase/supabase-js"
 import { afterEach, beforeAll, beforeEach, describe, expect, it } from "vitest"
 
-import { createRxDatabase, RxCollection, RxDatabase } from "rxdb";
+import { createRxDatabase, RxCollection, RxDatabase, WithDeleted } from "rxdb";
 import { getRxStorageMemory } from "rxdb/plugins/storage-memory";
 import { Human, HUMAN_SCHEMA } from "./test-types.js";
 import { replicateSupabase, SupabaseCheckpoint, SupabaseReplicationOptions } from "../index.js";
 import { RxReplicationState } from "rxdb/plugins/replication";
+import { addRxPlugin } from 'rxdb';
+import { RxDBDevModePlugin } from 'rxdb/plugins/dev-mode';
 
 /**
  * Integration test running against an actual Supabase instance.
@@ -19,6 +21,7 @@ describe("replicateSupabase with actual SupabaseClient", () => {
 
   beforeAll(() => {
     supabase = createClient(process.env.SUPABASE_URL!, process.env.SUPABASE_API_KEY!)
+    addRxPlugin(RxDBDevModePlugin);
   })
 
   beforeEach(async () => {
@@ -31,14 +34,18 @@ describe("replicateSupabase with actual SupabaseClient", () => {
     collection = (await db.addCollections({
       humans: { schema: HUMAN_SCHEMA },
     }))['humans']
+
+    expect(await rxdbContents()).toEqual([])
+    expect(await supabaseContents()).toEqual([])
   })
 
   describe("on client-side insertion", () => {
     it("inserts into supabase", async () => {
-      let replication = startReplication({pull: {}, push: {}})
+      let replication = startReplication()
 
-      collection.insert({id: '1', name: 'Alice'})
+      await collection.insert({id: '1', name: 'Alice'})
       await replication.awaitInSync()
+      replication.cancel()
 
       expect(await supabaseContents()).toEqual([{id: '1', name: 'Alice', age: null, '_deleted': false}])
     });
@@ -48,28 +55,60 @@ describe("replicateSupabase with actual SupabaseClient", () => {
     // TODO: Do I want all those tests against live DB? I guess not really, no, but some.
   });
 
-  let startReplication = (options: Partial<SupabaseReplicationOptions<Human>>): RxReplicationState<Human, SupabaseCheckpoint> => {
+  describe("when supabase changed while offline", () => {
+    it("pulls new rows", async () => {
+      // TODO: prepareDatabase. Or maybe into beforeEach?
+      let replication = startReplication()
+      await collection.insert({id: '1', name: 'Alice'})
+      await replication.awaitInSync()
+      await replication.cancel()
+
+      await supabase.from('humans').insert({id: '2', name: 'Bob', age: 42})
+
+      replication = startReplication()
+      await replication.awaitInSync()
+      
+      expect(await rxdbContents()).toEqual([
+        {id: '1', name: 'Alice'},
+        {id: '2', name: 'Bob', age: 42}
+      ])
+    });
+    
+    // TODO: test duplicate key error (should invoke conflict handler)
+    // TODO: test other error
+    // TODO: Do I want all those tests against live DB? I guess not really, no, but some.
+  });
+
+
+
+
+  let startReplication = (options: Partial<SupabaseReplicationOptions<Human>> = {}): RxReplicationState<Human, SupabaseCheckpoint> => {
     let status = replicateSupabase({
       supabaseClient: supabase,
       collection,
-      waitForLeadership: false,  // TODO: true doesn't work yet?
+      waitForLeadership: false,  // TODO: true doesn't work yet? Probably don't include field, should use SharedWorker anyways
       autoStart: true,
+      pull: {},
+      push: {},
       ...options
     })
     return status
   }
 
-  let supabaseContents = async (): Promise<Human[]> => {
+  let supabaseContents = async (stripModified: boolean = true): Promise<WithDeleted<Human>[]> => {
+    // TODO: Remove the serverTimestamp field?
     const { data, error } = await supabase.from('humans').select().order('id')
     if (error) throw error
-    return data as Human[]
+    if (stripModified) data.forEach(human => delete human['_modified'])
+    return data as WithDeleted<Human>[]
   }
 
-  afterEach(() => {
-    try {
-      db.destroy()
-    } catch (e) {
-      // Test did not insert anything into the database
-    }
+  let rxdbContents = async (): Promise<Human[]> => {
+    const results = await collection.find().exec()
+    return results.map(doc => doc.toJSON())
+  }
+
+  afterEach(async () => {
+    await db.remove()
   })
 });
