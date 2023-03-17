@@ -1,7 +1,6 @@
 import { ReplicationPullHandlerResult, RxReplicationWriteToMasterRow, WithDeleted } from "rxdb"
 import { RxReplicationState } from "rxdb/plugins/replication"
 import { SupabaseReplicationCheckpoint, SupabaseReplicationOptions } from "./index.js"
-import { ReplicationPullOptions, ReplicationPushOptions } from "./rxdb-internal-types.js"
 
 const DEFAULT_LAST_MODIFIED_FIELD = '_modified'
 const DEFAULT_DELETED_FIELD = '_deleted'
@@ -26,8 +25,16 @@ export class SupabaseReplication<RxDocType> {
       this.options.replicationIdentifier,
       this.options.collection,
       this.options.deletedField || DEFAULT_DELETED_FIELD,
-      this.options.pull && this.pullHandler(),
-      this.options.push && this.pushHandler(),
+      this.options.pull && {
+        ...this.options.pull,
+        stream$: undefined,   // TODO: live updates
+        handler: this.pullHandler.bind(this)
+      },
+      this.options.push && {
+        ...this.options.push,
+        batchSize: 1,         // TODO: support batch insertion
+        handler: this.pushHandler.bind(this)
+      },
       this.live,
       this.options.retryTime,
       typeof this.options.autoStart === 'undefined' ? true : this.options.autoStart 
@@ -37,76 +44,61 @@ export class SupabaseReplication<RxDocType> {
   /**
    * Pulls all changes since the last checkpoint from supabase.
    */
-  private pullHandler(): ReplicationPullOptions<RxDocType, SupabaseReplicationCheckpoint> {
-    return {
-      ...this.options,
-      stream$: undefined, // TODO: live updates
-      handler: async (lastCheckpoint: SupabaseReplicationCheckpoint, batchSize: number): Promise<ReplicationPullHandlerResult<RxDocType, SupabaseReplicationCheckpoint>> => {
-        console.log("Pulling changes since", lastCheckpoint?.modified)
+  private async pullHandler(lastCheckpoint: SupabaseReplicationCheckpoint, batchSize: number): Promise<ReplicationPullHandlerResult<RxDocType, SupabaseReplicationCheckpoint>> {
+    console.log("Pulling changes since", lastCheckpoint?.modified)
 
-        let query = this.options.supabaseClient.from(this.table).select()
-        if (lastCheckpoint) {
-          // TODO: support rows with the exact same timestamp
-          query = query.gt(this.lastModifiedFieldName, lastCheckpoint.modified)
-        }
+    let query = this.options.supabaseClient.from(this.table).select()
+    if (lastCheckpoint) {
+      // TODO: support rows with the exact same timestamp
+      query = query.gt(this.lastModifiedFieldName, lastCheckpoint.modified)
+    }
 
-        query = query.order(this.lastModifiedFieldName)
-                    .order(this.primaryKey)
-                    .limit(batchSize)
+    query = query.order(this.lastModifiedFieldName)
+                 .order(this.primaryKey)
+                 .limit(batchSize)
 
-        const { data, error } = await query
-        if (error) throw error
-        if (data.length == 0) {
-          console.log("No docs returned")
-          return {
-            checkpoint: lastCheckpoint,
-            documents: []
-          }
-        }
-
-        const lastDoc = data[data.length - 1]
-        const newCheckpoint: SupabaseReplicationCheckpoint = {
-          modified: lastDoc[this.lastModifiedFieldName],
-          primaryKeyValue: lastDoc[this.primaryKey]
-        }
-        const newDocs = data.map(doc => {
-          if (!this.options.lastModifiedFieldInCollection) {
-            delete doc[this.lastModifiedFieldName]
-          }
-          return doc as WithDeleted<RxDocType>
-        })
-
-        console.log("New checkpoint", newCheckpoint)
-        console.log("New docs", newDocs)
-        return {
-          checkpoint: newCheckpoint,
-          documents: newDocs
-        }
+    const { data, error } = await query
+    if (error) throw error
+    if (data.length == 0) {
+      console.log("No docs returned")
+      return {
+        checkpoint: lastCheckpoint,
+        documents: []
       }
     }
-  }
 
-  // TODO: support larger batch sizes to enable bulk insertion.
-  private pushHandler(): ReplicationPushOptions<RxDocType> {
+    const lastDoc = data[data.length - 1]
+    const newCheckpoint: SupabaseReplicationCheckpoint = {
+      modified: lastDoc[this.lastModifiedFieldName],
+      primaryKeyValue: lastDoc[this.primaryKey]
+    }
+    const newDocs = data.map(doc => {
+      if (!this.options.lastModifiedFieldInCollection) {
+        delete doc[this.lastModifiedFieldName]
+      }
+      return doc as WithDeleted<RxDocType>
+    })
+
+    console.log("New checkpoint", newCheckpoint)
+    console.log("New docs", newDocs)
     return {
-      ...this.options.push,
-      batchSize: 1,
-      handler: async (rows: RxReplicationWriteToMasterRow<RxDocType>[]): Promise<WithDeleted<RxDocType>[]> => {
-        if (rows.length != 1) throw 'Invalid batch size'
-        const row = rows[0]
-      
-        console.log("Pushing changes...", row.newDocumentState)
-
-        if (!row.assumedMasterState) {
-          return this.handleInsertion(row.newDocumentState)
-        } else {
-          throw 'Updating not supported yet'
-        }
-
-        return []
-      } 
+      checkpoint: newCheckpoint,
+      documents: newDocs
     }
   }
+
+  private async pushHandler(rows: RxReplicationWriteToMasterRow<RxDocType>[]): Promise<WithDeleted<RxDocType>[]> {
+    if (rows.length != 1) throw 'Invalid batch size'
+    const row = rows[0]
+  
+    console.log("Pushing changes...", row.newDocumentState)
+
+    if (!row.assumedMasterState) {
+      return this.handleInsertion(row.newDocumentState)
+    } else {
+      throw 'Updating not supported yet'
+    }
+  } 
 
   private async handleInsertion(doc: WithDeleted<RxDocType>): Promise<WithDeleted<RxDocType>[]> {
     const { error } = await this.options.supabaseClient.from(this.table).insert(doc)

@@ -1,6 +1,20 @@
+TODO:
+* push updates
+* push deletes?
+* live pulling
+* add unit tests
+* pull rows with exact same timestamp
+* Check TODOs
+* Cleanup console stuff
+* Better documentation
+* format
+* lint
+* README
+
+Post-release
+* Batch insertion
 
 Notes:
-
 * Replication ID and the problem around auth / user changes (maybe not really a problem)
 * _modified column (if pull is used)
 * _deleted column
@@ -11,7 +25,7 @@ Notes:
 Future TODO:
 * Sync only portion of the table (e.g. a where that will hold true for all rows)
   * Could be implemented with a callback passed in options
-  * Better to focus on SupabaseOfflineCache, probably?
+  * Better to focus on SupabaseOfflineCache, probably? Well, it's very easy to do though
 * Maybe __deleted table in the future?
 
 
