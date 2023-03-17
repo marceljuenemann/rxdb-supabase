@@ -5,7 +5,7 @@ import { afterEach, beforeAll, beforeEach, describe, expect, it } from "vitest"
 import { createRxDatabase, RxCollection, RxDatabase, WithDeleted } from "rxdb";
 import { getRxStorageMemory } from "rxdb/plugins/storage-memory";
 import { Human, HUMAN_SCHEMA } from "./test-types.js";
-import { replicateSupabase, SupabaseCheckpoint, SupabaseReplicationOptions } from "../index.js";
+import { replicateSupabase, SupabaseReplicationCheckpoint, SupabaseReplicationOptions } from "../index.js";
 import { RxReplicationState } from "rxdb/plugins/replication";
 import { addRxPlugin } from 'rxdb';
 import { RxDBDevModePlugin } from 'rxdb/plugins/dev-mode';
@@ -82,7 +82,7 @@ describe("replicateSupabase with actual SupabaseClient", () => {
 
 
 
-  let startReplication = (options: Partial<SupabaseReplicationOptions<Human>> = {}): RxReplicationState<Human, SupabaseCheckpoint> => {
+  let startReplication = (options: Partial<SupabaseReplicationOptions<Human>> = {}): RxReplicationState<Human, SupabaseReplicationCheckpoint> => {
     let status = replicateSupabase({
       supabaseClient: supabase,
       collection,

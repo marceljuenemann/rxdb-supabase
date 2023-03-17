@@ -1,12 +1,12 @@
 import type { ReplicationPullHandlerResult, ReplicationPullOptions } from "./rxdb-internal-types.js"
-import { SupabaseCheckpoint, SupabaseReplicationOptions } from "./index.js"
+import { SupabaseReplicationCheckpoint, SupabaseReplicationOptions } from "./index.js"
 
 
-export function pullHandler<T>(options: SupabaseReplicationOptions<T>): ReplicationPullOptions<T, SupabaseCheckpoint> {
+export function pullHandler<T>(options: SupabaseReplicationOptions<T>): ReplicationPullOptions<T, SupabaseReplicationCheckpoint> {
   return {
     ...options,
     stream$: undefined, // TODO
-    handler: (lastPulledCheckpoint: SupabaseCheckpoint, batchSize: number): Promise<ReplicationPullHandlerResult<T, SupabaseCheckpoint>> => {
+    handler: (lastPulledCheckpoint: SupabaseReplicationCheckpoint, batchSize: number): Promise<ReplicationPullHandlerResult<T, SupabaseReplicationCheckpoint>> => {
       console.log("Pulling changes...", lastPulledCheckpoint, batchSize)
       return Promise.resolve({
         checkpoint: lastPulledCheckpoint,
