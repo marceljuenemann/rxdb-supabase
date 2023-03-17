@@ -15,7 +15,7 @@ import { RxDBDevModePlugin } from 'rxdb/plugins/dev-mode';
  */
 // TODO: export schema into .sql file
 describe("replicateSupabase with actual SupabaseClient", () => {
-  let supabase: SupabaseClient 
+  let supabase: SupabaseClient
   let db: RxDatabase
   let collection: RxCollection<Human>
 
@@ -32,42 +32,65 @@ describe("replicateSupabase with actual SupabaseClient", () => {
     // Create an in-memory RxDB database.
     db = await createRxDatabase({name: 'test', storage: getRxStorageMemory()});
     collection = (await db.addCollections({
-      humans: { schema: HUMAN_SCHEMA },
+      humans: {
+        schema: HUMAN_SCHEMA, 
+        /*conflictHandler: (input, context) => {
+        return Promise.resolve({ isEqual: false, documentData: input.realMasterState })
+      }*/
+      },
     }))['humans']
 
-    expect(await rxdbContents()).toEqual([])
-    expect(await supabaseContents()).toEqual([])
+    // Start with Alice :)
+    await replication({}, async() => {
+      await collection.insert({id: '1', name: 'Alice', age: null})
+    })
+
+    expect(await rxdbContents()).toEqual([{id: '1', name: 'Alice', age: null}])
+    expect(await supabaseContents()).toEqual([{id: '1', name: 'Alice', age: null, '_deleted': false}])
   })
 
+  // TODO: test duplicate key error (should invoke conflict handler)
+  // TODO: test other error
+  // TODO: Start a unit test for some of these
   describe("on client-side insertion", () => {
-    it("inserts into supabase", async () => {
-      let replication = startReplication({pull: undefined})
+    describe("without conflict", () => {
+      it("inserts into supabase", async () => {
+        await replication({}, async() => {
+          await collection.insert({id: '2', name: 'Bob', age: null})
+        })
 
-      await collection.insert({id: '1', name: 'Alice'})
-      await replication.awaitInSync()
-      replication.cancel()
+        expect(await supabaseContents()).toEqual([
+          {id: '1', name: 'Alice', age: null, '_deleted': false},
+          {id: '2', name: 'Bob', age: null, '_deleted': false}
+        ])
+      })
+    })
 
-      expect(await supabaseContents()).toEqual([{id: '1', name: 'Alice', age: null, '_deleted': false}])
-    });
-    
-    // TODO: test duplicate key error (should invoke conflict handler)
-    // TODO: test other error
-    // TODO: Do I want all those tests against live DB? I guess not really, no, but some.
+    describe("with conflict", () => {
+      describe("with default conflict handler", () => {
+        it("drops insertion", async () => {
+          await supabase.from('humans').insert({id: '2', name: 'Bob'})
+          await collection.insert({id: '2', name: 'Bob 2', age: 2})
+          await replication()
+  
+          expect(await supabaseContents()).toEqual([
+            {id: '1', name: 'Alice', age: null, '_deleted': false},
+            {id: '2', name: 'Bob', age: null, '_deleted': false}
+          ])
+          expect(await rxdbContents()).toEqual([
+            {id: '1', name: 'Alice', age: null},
+            {id: '2', name: 'Bob', age: null}
+          ])
+        })  
+      })
+    })
   });
 
   describe("when supabase changed while offline", () => {
-    it.only("pulls new rows", async () => {
-      // TODO: prepareDatabase. Or maybe into beforeEach?
-      let replication = startReplication({})
-      await collection.insert({id: '1', name: 'Alice'})
-      await replication.awaitInSync()
-      await replication.cancel()
-
+    it("pulls new rows", async () => {
       await supabase.from('humans').insert({id: '2', name: 'Bob', age: 42})
+      await replication()
 
-      replication = startReplication()
-      await replication.awaitInSync()
-      
       expect(await rxdbContents()).toEqual([
         {id: '1', name: 'Alice', age: null},
         {id: '2', name: 'Bob', age: 42}
@@ -79,8 +102,12 @@ describe("replicateSupabase with actual SupabaseClient", () => {
     // TODO: Do I want all those tests against live DB? I guess not really, no, but some.
   });
 
-
-
+  let replication = async (options: Partial<SupabaseReplicationOptions<Human>> = {}, transactions: () => Promise<void> = async() => {}): Promise<void> => {
+    let replication = startReplication(options)
+    await transactions()
+    await replication.awaitInSync()
+    await replication.cancel()
+  }
 
   let startReplication = (options: Partial<SupabaseReplicationOptions<Human>> = {}): RxReplicationState<Human, SupabaseReplicationCheckpoint> => {
     let status = replicateSupabase({

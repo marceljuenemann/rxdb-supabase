@@ -1,33 +1,29 @@
 
-
-Issues:
-* rxdb/types is not exposed :/
-  Need to add this to the rxdb package.json at the moment
-
-    "./types": {
-      "types": "./dist/types/types/index.d.ts"
-    },
-
-
 Notes:
 
-* Replication ID and the problem around auth / user changes
-* _modified column
+* Replication ID and the problem around auth / user changes (maybe not really a problem)
+* _modified column (if pull is used)
 * _deleted column
   * Refer to cleanup plugin. TODO: Will that replicate though, no?
-  * TODO: allow to set to null for never delete case? That wouldn't allow for cleanup though
-
+  * TODO: allow to set to null for push-only mode, in which case we don't store it
 
 
 Future TODO:
 * Sync only portion of the table (e.g. a where that will hold true for all rows)
   * Could be implemented with a callback passed in options
+  * Better to focus on SupabaseOfflineCache, probably?
 * Maybe __deleted table in the future?
 
 
-
-
-
+Future project:
+* Build more of a SupabaseOfflineCache that uses only the returned queries as source stream
+  for the pull handler. Push would work normally. That way, you don't need to download the
+  database ahead of time, but all queried documents will be stored offline and updates will
+  get queued. You an also serve queries from cache faster. And you wouldn't need the modified
+  and deleted flag necessarily.
+  * This would require matching the returned result to the query from the offline db though,
+    so we'll need our own query builder (which will be limited to the intersection of what's
+    supported by superbase and rxdb)
 
 
 

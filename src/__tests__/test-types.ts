@@ -2,7 +2,7 @@
 export interface Human {
   id: string,
   name: string,
-  age?: number
+  age: number | null
 }
 
 export const HUMAN_SCHEMA = {
@@ -26,6 +26,6 @@ export const HUMAN_SCHEMA = {
           multipleOf: 1
       }
   },
-  required: ['name', 'id'],
+  required: ['name', 'id', 'age'],
   indexes: ['age']
 }  
