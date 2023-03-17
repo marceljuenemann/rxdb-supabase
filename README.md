@@ -1,5 +1,8 @@
 TODO:
 * push updates
+  * Enable nulls
+  * Conflicts test
+  * Test custom update handler
 * push deletes?
 * live pulling
 * add unit tests
@@ -20,7 +23,7 @@ Notes:
 * _deleted column
   * Refer to cleanup plugin. TODO: Will that replicate though, no?
   * TODO: allow to set to null for push-only mode, in which case we don't store it
-
+* Only use null collections :)
 
 Future TODO:
 * Sync only portion of the table (e.g. a where that will hold true for all rows)

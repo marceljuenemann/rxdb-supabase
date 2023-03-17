@@ -99,10 +99,37 @@ describe("replicateSupabase with actual SupabaseClient", () => {
         })  
       })      
     })
-  });
+
+    describe.only("on client-side update", () => {
+      describe("without conflict", () => {
+        it("updates supabase", async () => {
+          await replication({}, async() => {
+            await collection.insert({id: '2', name: 'Bob', age: 1})
+          })  
+          await replication({}, async() => {
+            let doc = await collection.findOne('1').exec()
+            await doc!.patch({age: 2})
+          })  
+          expect(await rxdbContents()).toEqual([
+            {id: '1', name: 'Alice', age: null},
+            {id: '2', name: 'Bob', age: 2}
+          ])
+          expect(await supabaseContents()).toEqual([
+            {id: '1', name: 'Alice', age: null, '_deleted': false},
+            {id: '2', name: 'Bob', age: 2, '_deleted': false}
+          ])
+        })
+      })    
+    })
+  })
 
   describe("when supabase changed while offline", () => {
     it("pulls new rows", async () => {
+      collection.conflictHandler = async (input, contet) => {
+        console.error("Conflict handler invoked", input)
+        return { isEqual: false, documentData: input.realMasterState }
+      }
+
       await supabase.from('humans').insert({id: '2', name: 'Bob', age: 42})
       await replication()
 
@@ -115,6 +142,7 @@ describe("replicateSupabase with actual SupabaseClient", () => {
 
   let replication = async (options: Partial<SupabaseReplicationOptions<Human>> = {}, transactions: () => Promise<void> = async() => {}): Promise<void> => {
     let replication = startReplication(options)
+    await replication.awaitInSync()
     await transactions()
     await replication.awaitInSync()
     await replication.cancel()

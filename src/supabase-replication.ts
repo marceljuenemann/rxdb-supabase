@@ -36,7 +36,7 @@ export class SupabaseReplication<RxDocType> {
         handler: this.pushHandler.bind(this)
       },
       this.live,
-      this.options.retryTime,
+      typeof this.options.retryTime === 'undefined' ? 5000 : this.options.retryTime,
       typeof this.options.autoStart === 'undefined' ? true : this.options.autoStart 
     )
   }
@@ -72,12 +72,7 @@ export class SupabaseReplication<RxDocType> {
       modified: lastDoc[this.lastModifiedFieldName],
       primaryKeyValue: lastDoc[this.primaryKey]
     }
-    const newDocs = data.map(doc => {
-      if (!this.options.lastModifiedFieldInCollection) {
-        delete doc[this.lastModifiedFieldName]
-      }
-      return doc as WithDeleted<RxDocType>
-    })
+    const newDocs = data.map(this.rowToRxDoc.bind(this))
 
     console.log("New checkpoint", newCheckpoint)
     console.log("New docs", newDocs)
@@ -87,26 +82,49 @@ export class SupabaseReplication<RxDocType> {
     }
   }
 
+  /**
+   * Pushes local changes to supabase.
+   */
   private async pushHandler(rows: RxReplicationWriteToMasterRow<RxDocType>[]): Promise<WithDeleted<RxDocType>[]> {
     if (rows.length != 1) throw 'Invalid batch size'
     const row = rows[0]
   
     console.log("Pushing changes...", row.newDocumentState)
 
-    if (!row.assumedMasterState) {
-      return this.handleInsertion(row.newDocumentState)
-    } else {
-      throw 'Updating not supported yet'
-    }
-  } 
+    return row.assumedMasterState ? this.handleUpdate(row) : this.handleInsertion(row.newDocumentState)
+  }
 
+  /**
+   * Tries to insert a new row. Returns the current state of the row in case of a conflict. 
+   */
   private async handleInsertion(doc: WithDeleted<RxDocType>): Promise<WithDeleted<RxDocType>[]> {
     const { error } = await this.options.supabaseClient.from(this.table).insert(doc)
-    if (!error) return []  // Success :)
-    if (error.code != POSTGRES_DUPLICATE_KEY_ERROR_CODE) throw error  // TODO: test
+    if (!error) {
+      return []  // Success :)
+    } else if (error.code == POSTGRES_DUPLICATE_KEY_ERROR_CODE) {
+      // The row was already inserted. Fetch current state and let conflict handler resolve it.
+      return [await this.fetchByPrimaryKey((doc as any)[this.primaryKey])]
+    } else {
+      throw error  // TODO: add test
+    }
+  }
 
-    // The row was already inserted. Fetch current state and let conflict handler resolve it.
-    return [await this.fetchByPrimaryKey((doc as any)[this.primaryKey])]
+  /**
+   * Updates a row in supabase if all fields match the local state. Otherwise, the current
+   * state is fetched and passed to the conflict handler. 
+   */
+  private async handleUpdate(row: RxReplicationWriteToMasterRow<RxDocType>): Promise<WithDeleted<RxDocType>[]> {
+    const query = this.options.supabaseClient
+        .from(this.table)
+        .update(row.newDocumentState, { count: 'exact' })
+        //.eq(this.primaryKey, (row.newDocumentState as any)[this.primaryKey])
+        .match(row.assumedMasterState!)  // TODO: Does not work for null and jsonb fields?
+    const { error, count } = await query
+    console.debug("Update request:", (query as any)['url'].toString())
+    if (error) throw error
+    if (count == 1) return []  // Success :)
+    // Fetch current state and let conflict handler resolve it.
+    return [await this.fetchByPrimaryKey((row as any)[this.primaryKey])]
   }
 
   private async fetchByPrimaryKey(primaryKeyValue: any): Promise<WithDeleted<RxDocType>>  {
