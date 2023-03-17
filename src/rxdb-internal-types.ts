@@ -2,6 +2,9 @@
  * RxDB types that are not part of rxdb's exports (as far as I can tell).
  * 
  * TODO: Ask them to export these types, so we don't have to copy them here.
+ * 
+ * Copyright for the following code belongs to pubkey (https://github.com/pubkey/rxdb).
+ * Originally licensed under Apache License 2.0: https://github.com/pubkey/rxdb/blob/master/LICENSE.txt
  */
 
 import { RxCollection, RxReplicationPullStreamItem, RxReplicationWriteToMasterRow, WithDeleted } from "rxdb";

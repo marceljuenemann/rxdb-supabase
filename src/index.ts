@@ -2,13 +2,7 @@ import { RxReplicationState, startReplicationOnLeaderShip } from 'rxdb/plugins/r
 import { SupabaseClient } from '@supabase/supabase-js'
 
 import type { ReplicationOptions, ReplicationPullOptions, ReplicationPushOptions } from './rxdb-internal-types.js'
-
-import { pullHandler } from './pull.js'
-import { pushHandler } from './push.js'
-import { type } from 'os'
-
-const DEFAULT_LAST_MODIFIED_FIELD = '_modified'
-const DEFAULT_DELETED_FIELD = '_deleted'
+import { SupabaseReplication } from './supabase-replication.js'
 
 export type SupabaseReplicationOptions<RxDocType> = {
   /**
@@ -73,26 +67,9 @@ export type SupabaseReplicationCheckpoint = {
   primaryKeyValue: string
 };
 
-export function replicateSupabase<RxDocType>(options: SupabaseReplicationOptions<RxDocType>) {
-  const table = options.table || options.collection.name
-  // TODO: can push these into pull.ts probably
-  const primaryKey = options.primaryKey || options.collection.schema.primaryPath
-  const lastModifiedFieldName = options.lastModifiedFieldName || DEFAULT_LAST_MODIFIED_FIELD
-  const live = typeof options.live === 'undefined' ? true : options.live
-  //const serverTimestampField = typeof options.serverTimestampField === 'undefined' ? 'serverTimestamp' : options.serverTimestampField;
-  
-  const replicationState = new RxReplicationState<RxDocType, SupabaseReplicationCheckpoint>(
-    options.replicationIdentifier,
-    options.collection,
-    options.deletedField || DEFAULT_DELETED_FIELD,
-    options.pull && pullHandler({...options, table, primaryKey, lastModifiedFieldName}),
-    options.push && pushHandler({...options, table, primaryKey, lastModifiedFieldName}),
-    live,
-    options.retryTime,
-    typeof options.autoStart === 'undefined' ? true : options.autoStart 
-  );
- 
-  // Starts the replication if autoStart is true (or absent).
+// TODO: some documentation
+export function replicateSupabase<RxDocType>(options: SupabaseReplicationOptions<RxDocType>): RxReplicationState<RxDocType, SupabaseReplicationCheckpoint> {
+  const replicationState = new SupabaseReplication(options).replicationState
   startReplicationOnLeaderShip(false, replicationState);
   return replicationState;
 }

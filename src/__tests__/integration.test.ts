@@ -32,12 +32,7 @@ describe("replicateSupabase with actual SupabaseClient", () => {
     // Create an in-memory RxDB database.
     db = await createRxDatabase({name: 'test', storage: getRxStorageMemory()});
     collection = (await db.addCollections({
-      humans: {
-        schema: HUMAN_SCHEMA, 
-        /*conflictHandler: (input, context) => {
-        return Promise.resolve({ isEqual: false, documentData: input.realMasterState })
-      }*/
-      },
+      humans: { schema: HUMAN_SCHEMA },
     }))['humans']
 
     // Start with Alice :)
