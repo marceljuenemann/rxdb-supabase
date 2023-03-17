@@ -5,11 +5,56 @@ import type { ReplicationOptions, ReplicationPullOptions, ReplicationPushOptions
 
 import { pullHandler } from './pull.js'
 import { pushHandler } from './push.js'
+import { type } from 'os'
+
+const DEFAULT_LAST_MODIFIED_FIELD = '_modified'
+const DEFAULT_DELETED_FIELD = '_deleted'
 
 export type SupabaseReplicationOptions<RxDocType> = {
+  /**
+   * The SupabaseClient to replicate with.
+   */
   supabaseClient: SupabaseClient,
-  // TODO: allow stream$ for custom postgresChanges listener
+
+  /**
+   * The table to replicate to, if different from the name of the collection.
+   * @default the name of the RxDB collection.
+   */
+  table?: string,
+
+  /**
+   * The primary key of the supabase table, if different from the primary key of the RxDB.
+   * @default the primary key of the RxDB collection
+   */
+  // TODO: Support composite primary keys.
+  primaryKey?: string,
+
+  /**
+   * The name of the supabase field that is automatically updated to the last
+   * modified timestamp by postgres. This field is required for the pull sync
+   * to work and can easily be implemented with moddatetime in supabase.
+   * @default '_modified'
+   */
+  lastModifiedFieldName?: string,
+
+  /**
+   * Whether the last modified field is part of the collection, or only exists
+   * in the supabase table.
+   * @default false
+   */
+  // TODO: automatically determine this from the collection
+  lastModifiedFieldInCollection?: boolean,
+
+  /**
+   * Options for pulling data from supabase. Set to {} to pull with the default
+   * options, as no data will be pulled if the field is absent.
+   */
   pull?: Omit<ReplicationPullOptions<RxDocType, SupabaseReplicationCheckpoint>, 'handler' | 'stream$'>;
+
+  /**
+   * Options for pushing data to supabase. Set to {} to push with the default
+   * options, as no data will be pushed if the field is absent.
+   */
   // TODO: enable custom batch size (currently always one row at a time)
   push?: Omit<ReplicationPushOptions<RxDocType>, 'handler' | 'batchSize'>
 } & Omit<
@@ -29,18 +74,22 @@ export type SupabaseReplicationCheckpoint = {
 };
 
 export function replicateSupabase<RxDocType>(options: SupabaseReplicationOptions<RxDocType>) {
-  options.live = typeof options.live === 'undefined' ? true : options.live;
+  const table = options.table || options.collection.name
+  // TODO: can push these into pull.ts probably
+  const primaryKey = options.primaryKey || options.collection.schema.primaryPath
+  const lastModifiedFieldName = options.lastModifiedFieldName || DEFAULT_LAST_MODIFIED_FIELD
+  const live = typeof options.live === 'undefined' ? true : options.live
   //const serverTimestampField = typeof options.serverTimestampField === 'undefined' ? 'serverTimestamp' : options.serverTimestampField;
   
   const replicationState = new RxReplicationState<RxDocType, SupabaseReplicationCheckpoint>(
     options.replicationIdentifier,
     options.collection,
-    options.deletedField || '_deleted',
-    options.pull && pullHandler(options),
+    options.deletedField || DEFAULT_DELETED_FIELD,
+    options.pull && pullHandler({...options, table, primaryKey, lastModifiedFieldName}),
     options.push && pushHandler(options),
-    options.live,
+    live,
     options.retryTime,
-    options.autoStart
+    typeof options.autoStart === 'undefined' ? true : options.autoStart 
   );
  
   // Starts the replication if autoStart is true (or absent).

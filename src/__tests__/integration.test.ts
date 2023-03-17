@@ -41,7 +41,7 @@ describe("replicateSupabase with actual SupabaseClient", () => {
 
   describe("on client-side insertion", () => {
     it("inserts into supabase", async () => {
-      let replication = startReplication()
+      let replication = startReplication({pull: undefined})
 
       await collection.insert({id: '1', name: 'Alice'})
       await replication.awaitInSync()
@@ -56,9 +56,9 @@ describe("replicateSupabase with actual SupabaseClient", () => {
   });
 
   describe("when supabase changed while offline", () => {
-    it("pulls new rows", async () => {
+    it.only("pulls new rows", async () => {
       // TODO: prepareDatabase. Or maybe into beforeEach?
-      let replication = startReplication()
+      let replication = startReplication({})
       await collection.insert({id: '1', name: 'Alice'})
       await replication.awaitInSync()
       await replication.cancel()
@@ -69,7 +69,7 @@ describe("replicateSupabase with actual SupabaseClient", () => {
       await replication.awaitInSync()
       
       expect(await rxdbContents()).toEqual([
-        {id: '1', name: 'Alice'},
+        {id: '1', name: 'Alice', age: null},
         {id: '2', name: 'Bob', age: 42}
       ])
     });
@@ -84,13 +84,16 @@ describe("replicateSupabase with actual SupabaseClient", () => {
 
   let startReplication = (options: Partial<SupabaseReplicationOptions<Human>> = {}): RxReplicationState<Human, SupabaseReplicationCheckpoint> => {
     let status = replicateSupabase({
+      replicationIdentifier: 'test',
       supabaseClient: supabase,
       collection,
-      waitForLeadership: false,  // TODO: true doesn't work yet? Probably don't include field, should use SharedWorker anyways
-      autoStart: true,
       pull: {},
       push: {},
       ...options
+    })
+    // TODO: Add unit tests for errors thrown by supabse
+    status.error$.subscribe(error => {
+      console.error(error)
     })
     return status
   }

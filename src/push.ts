@@ -13,16 +13,13 @@ export function pushHandler<T>(options: SupabaseReplicationOptions<T>): Replicat
       if (rows.length != 1) throw 'Invalid batch size'
       const row = rows[0]
      
-      console.log("Pushing changes...", row)
+      console.log("Pushing changes...", row.newDocumentState)
 
       if (!row.assumedMasterState) {
-        console.log("Inserting x...")
-
         const { error } = await options.supabaseClient.from('humans') // TODO: configurable
           .insert(row.newDocumentState)
 
         if (!error) {
-          console.log("Success!")
           return []
         }
         if (error.code != POSTGRES_DUPLICATE_KEY_ERROR_CODE) console.error("error")
