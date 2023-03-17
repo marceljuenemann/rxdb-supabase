@@ -1,3 +1,35 @@
+
+
+Issues:
+* rxdb/types is not exposed :/
+  Need to add this to the rxdb package.json at the moment
+
+    "./types": {
+      "types": "./dist/types/types/index.d.ts"
+    },
+
+
+Notes:
+
+* Replication ID and the problem around auth / user changes
+* _deleted column
+* modified column
+
+
+
+Future TODO:
+* Sync only portion of the table (e.g. a where that will hold true for all rows)
+  * Could be implemented with a callback passed in options
+* Maybe __deleted table in the future?
+
+
+
+
+
+
+
+
+
 # Typescript Library Starter
 
 ![NPM](https://img.shields.io/npm/l/@gjuchault/typescript-library-starter)

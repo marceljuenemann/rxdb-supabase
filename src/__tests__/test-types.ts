@@ -1,25 +1,21 @@
 
 export interface Human {
-  passportId: string,
-  firstName: string,
-  lastName: string,
+  id: string,
+  name: string,
   age?: number
 }
 
 export const HUMAN_SCHEMA = {
   title: 'human schema',
   version: 0,
-  primaryKey: 'passportId',
+  primaryKey: 'id',
   type: 'object',
   properties: {
-      passportId: {
+      id: {
           type: 'string',
           maxLength: 100
       },
-      firstName: {
-          type: 'string'
-      },
-      lastName: {
+      name: {
           type: 'string'
       },
       age: {
@@ -30,6 +26,6 @@ export const HUMAN_SCHEMA = {
           multipleOf: 1
       }
   },
-  required: ['firstName', 'lastName', 'passportId'],
+  required: ['name', 'id'],
   indexes: ['age']
 }  
