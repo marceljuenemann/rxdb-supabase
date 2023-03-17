@@ -1,13 +1,11 @@
 import { RxCollection, addRxPlugin, RxReplicationWriteToMasterRow, ReplicationPullHandlerResult, WithDeleted } from 'rxdb'
 import { RxReplicationState, startReplicationOnLeaderShip } from 'rxdb/plugins/replication'
 import { RxDBLeaderElectionPlugin } from 'rxdb/plugins/leader-election'
-
-// TODO: Just don't import these and work around the fact rxdb doesn't expose them
-import type { ReplicationOptions, ReplicationPullOptions, ReplicationPushOptions } from 'rxdb/types'
-
 import { SupabaseClient } from '@supabase/supabase-js'
 
-// TODO: move to types
+import type { ReplicationOptions, ReplicationPullOptions, ReplicationPushOptions } from './rxdb-internal-types.js'
+
+import { pullHandler } from './pull.js'
 
 const POSTGRES_DUPLICATE_KEY_ERROR_CODE = '23505'
 
@@ -102,20 +100,6 @@ export function replicateSupabase<RxDocType>(options: SupabaseReplicationOptions
   // Starting the replication as soon as leadership has been decided.
   startReplicationOnLeaderShip(options.waitForLeadership, replicationState);
   return replicationState;
-}
-
-function pullHandler<T>(options: SupabaseReplicationOptions<T>): ReplicationPullOptions<T, SupabaseCheckpoint> {
-  return {
-    ...options,
-    stream$: undefined, // TODO
-    handler: (lastPulledCheckpoint: SupabaseCheckpoint, batchSize: number): Promise<ReplicationPullHandlerResult<T, SupabaseCheckpoint>> => {
-      console.log("Pulling changes...", lastPulledCheckpoint, batchSize)
-      return Promise.resolve({
-        checkpoint: lastPulledCheckpoint,
-        documents: []
-      })
-    }
-  }
 }
 
 // TODO: maybe move to push.ts? Might not be needed, but rename this file to something nicer.
