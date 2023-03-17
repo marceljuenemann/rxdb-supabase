@@ -49,9 +49,6 @@ describe("replicateSupabase with actual SupabaseClient", () => {
     expect(await supabaseContents()).toEqual([{id: '1', name: 'Alice', age: null, '_deleted': false}])
   })
 
-  // TODO: test duplicate key error (should invoke conflict handler)
-  // TODO: test other error
-  // TODO: Start a unit test for some of these
   describe("on client-side insertion", () => {
     describe("without conflict", () => {
       it("inserts into supabase", async () => {
@@ -83,6 +80,29 @@ describe("replicateSupabase with actual SupabaseClient", () => {
           ])
         })  
       })
+
+      describe("with custom conflict handler", () => {
+        it("invokes conflict handler", async () => {
+          collection.conflictHandler = (input, context) => {
+            return Promise.resolve({
+              isEqual: false,
+              documentData: {...input.newDocumentState, name: 'Conflict resolved'}
+            })
+          }
+          await supabase.from('humans').insert({id: '2', name: 'Bob'})
+          await collection.insert({id: '2', name: 'Bob 2', age: 2})
+          await replication()
+  
+          expect(await supabaseContents()).toEqual([
+            {id: '1', name: 'Alice', age: null, '_deleted': false},
+            {id: '2', name: 'Bob', age: null, '_deleted': false}
+          ])
+          expect(await rxdbContents()).toEqual([
+            {id: '1', name: 'Alice', age: null},
+            {id: '2', name: 'Conflict resolved', age: 2}
+          ])
+        })  
+      })      
     })
   });
 
@@ -96,10 +116,6 @@ describe("replicateSupabase with actual SupabaseClient", () => {
         {id: '2', name: 'Bob', age: 42}
       ])
     });
-    
-    // TODO: test duplicate key error (should invoke conflict handler)
-    // TODO: test other error
-    // TODO: Do I want all those tests against live DB? I guess not really, no, but some.
   });
 
   let replication = async (options: Partial<SupabaseReplicationOptions<Human>> = {}, transactions: () => Promise<void> = async() => {}): Promise<void> => {
@@ -126,7 +142,6 @@ describe("replicateSupabase with actual SupabaseClient", () => {
   }
 
   let supabaseContents = async (stripModified: boolean = true): Promise<WithDeleted<Human>[]> => {
-    // TODO: Remove the serverTimestamp field?
     const { data, error } = await supabase.from('humans').select().order('id')
     if (error) throw error
     if (stripModified) data.forEach(human => delete human['_modified'])

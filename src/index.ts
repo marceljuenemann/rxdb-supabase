@@ -86,7 +86,7 @@ export function replicateSupabase<RxDocType>(options: SupabaseReplicationOptions
     options.collection,
     options.deletedField || DEFAULT_DELETED_FIELD,
     options.pull && pullHandler({...options, table, primaryKey, lastModifiedFieldName}),
-    options.push && pushHandler(options),
+    options.push && pushHandler({...options, table, primaryKey, lastModifiedFieldName}),
     live,
     options.retryTime,
     typeof options.autoStart === 'undefined' ? true : options.autoStart 
