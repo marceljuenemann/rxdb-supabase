@@ -3,6 +3,7 @@ import { SupabaseClient } from '@supabase/supabase-js'
 
 import type { ReplicationOptions, ReplicationPullOptions, ReplicationPushOptions } from './rxdb-internal-types.js'
 import { SupabaseReplication } from './supabase-replication.js'
+import { RxReplicationWriteToMasterRow } from 'rxdb'
 
 export type SupabaseReplicationOptions<RxDocType> = {
   /**
@@ -50,7 +51,19 @@ export type SupabaseReplicationOptions<RxDocType> = {
    * options, as no data will be pushed if the field is absent.
    */
   // TODO: enable custom batch size (currently always one row at a time)
-  push?: Omit<ReplicationPushOptions<RxDocType>, 'handler' | 'batchSize'>
+  push?: Omit<ReplicationPushOptions<RxDocType>, 'handler' | 'batchSize'>,
+
+  /**
+   * Handler for pushing row updates to supabase. Must return true iff the UPDATE was
+   * applied to the supabase table. Returning false signalises a write conflict, in
+   * which case the current state of the row will be fetched from supabase and passed to
+   * the RxDB collection's conflict handler.
+   * @default the default handler will update the row only iff all fields match the
+   * local state (before the update was applied), otherwise the conflict handler is
+   * invoked. The default handler does not support JSON fields at the moment.
+   */
+  // TODO: Support JSON fields
+  updateHandler?: (row: RxReplicationWriteToMasterRow<RxDocType>) => Promise<boolean>
 } & Omit<
   // We don't support waitForLeadership. You should just run in a SharedWorker anyways, no?
   ReplicationOptions<RxDocType, any>, 'pull' | 'push' | 'waitForLeadership'

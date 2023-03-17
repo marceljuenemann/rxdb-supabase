@@ -2,7 +2,7 @@ import process from "process"
 import { SupabaseClient, createClient } from "@supabase/supabase-js"
 import { afterEach, beforeAll, beforeEach, describe, expect, it } from "vitest"
 
-import { createRxDatabase, RxCollection, RxDatabase, WithDeleted } from "rxdb";
+import { createRxDatabase, RxCollection, RxConflictHandler, RxConflictHandlerInput, RxDatabase, WithDeleted } from "rxdb";
 import { getRxStorageMemory } from "rxdb/plugins/storage-memory";
 import { Human, HUMAN_SCHEMA } from "./test-types.js";
 import { replicateSupabase, SupabaseReplicationCheckpoint, SupabaseReplicationOptions } from "../index.js";
@@ -37,6 +37,7 @@ describe("replicateSupabase with actual SupabaseClient", () => {
 
     // Start with Alice :)
     await replication({}, async() => {
+      // TODO: remove explicit null, should be set by pull anyways
       await collection.insert({id: '1', name: 'Alice', age: null})
     })
 
@@ -78,19 +79,15 @@ describe("replicateSupabase with actual SupabaseClient", () => {
 
       describe("with custom conflict handler", () => {
         it("invokes conflict handler", async () => {
-          collection.conflictHandler = (input, context) => {
-            return Promise.resolve({
-              isEqual: false,
-              documentData: {...input.newDocumentState, name: 'Conflict resolved'}
-            })
-          }
+          collection.conflictHandler = resolveConflictWithName('Conflict resolved')
+
           await supabase.from('humans').insert({id: '2', name: 'Bob'})
           await collection.insert({id: '2', name: 'Bob 2', age: 2})
           await replication()
   
           expect(await supabaseContents()).toEqual([
             {id: '1', name: 'Alice', age: null, '_deleted': false},
-            {id: '2', name: 'Bob', age: null, '_deleted': false}
+            {id: '2', name: 'Conflict resolved', age: 2, '_deleted': false}
           ])
           expect(await rxdbContents()).toEqual([
             {id: '1', name: 'Alice', age: null},
@@ -100,32 +97,58 @@ describe("replicateSupabase with actual SupabaseClient", () => {
       })      
     })
 
-    describe.only("on client-side update", () => {
+    describe("on client-side update", () => {
       describe("without conflict", () => {
         it("updates supabase", async () => {
           await replication({}, async() => {
-            await collection.insert({id: '2', name: 'Bob', age: 1})
-          })  
-          await replication({}, async() => {
             let doc = await collection.findOne('1').exec()
-            await doc!.patch({age: 2})
+            await doc!.patch({age: 42})
           })  
-          expect(await rxdbContents()).toEqual([
-            {id: '1', name: 'Alice', age: null},
-            {id: '2', name: 'Bob', age: 2}
-          ])
           expect(await supabaseContents()).toEqual([
-            {id: '1', name: 'Alice', age: null, '_deleted': false},
-            {id: '2', name: 'Bob', age: 2, '_deleted': false}
+            {id: '1', name: 'Alice', age: 42, '_deleted': false}
           ])
         })
       })    
+
+      describe("with conflict", () => {
+        beforeEach(async () => {
+          // Set Alice's age to 42 locally, while changing her name on the server.
+          let doc = await collection.findOne('1').exec()
+          await doc!.patch({age: 42})
+          await supabase.from('humans').update({name: 'Alex'}).eq('id', '1')
+        })
+
+        describe("with default conflict handler", () => {
+          it("applies supabase changes", async () => {
+            await replication()
+            expect(await rxdbContents()).toEqual([
+              {id: '1', name: 'Alex', age: null}
+            ])
+            expect(await supabaseContents()).toEqual([
+              {id: '1', name: 'Alex', age: null, '_deleted': false}
+            ])
+          })
+        })
+
+        describe("with custom conflict handler", () => {
+          it("invokes conflict handler", async () => {
+            collection.conflictHandler = resolveConflictWithName('Conflict resolved')
+            await replication()
+            expect(await rxdbContents()).toEqual([
+              {id: '1', name: 'Conflict resolved', age: 42}
+            ])
+            expect(await supabaseContents()).toEqual([
+              {id: '1', name: 'Conflict resolved', age: 42, '_deleted': false}
+            ])
+          })
+        })
+      })  
     })
   })
 
   describe("when supabase changed while offline", () => {
     it("pulls new rows", async () => {
-      collection.conflictHandler = async (input, contet) => {
+      collection.conflictHandler = async (input, context) => {
         console.error("Conflict handler invoked", input)
         return { isEqual: false, documentData: input.realMasterState }
       }
@@ -142,8 +165,10 @@ describe("replicateSupabase with actual SupabaseClient", () => {
 
   let replication = async (options: Partial<SupabaseReplicationOptions<Human>> = {}, transactions: () => Promise<void> = async() => {}): Promise<void> => {
     let replication = startReplication(options)
-    await replication.awaitInSync()
+    await replication.awaitInitialReplication()
     await transactions()
+    await replication.awaitInSync()
+    replication.reSync()  // TODO: should not be necessary with live replication
     await replication.awaitInSync()
     await replication.cancel()
   }
@@ -162,6 +187,15 @@ describe("replicateSupabase with actual SupabaseClient", () => {
       console.error(error)
     })
     return status
+  }
+
+  let resolveConflictWithName = <T>(name: string): RxConflictHandler<T> => {
+    return async (input: RxConflictHandlerInput<T>) => {
+      return {
+        isEqual: false,
+        documentData: {...input.newDocumentState, name}
+      }
+    }
   }
 
   let supabaseContents = async (stripModified: boolean = true): Promise<WithDeleted<Human>[]> => {

@@ -114,17 +114,31 @@ export class SupabaseReplication<RxDocType> {
    * state is fetched and passed to the conflict handler. 
    */
   private async handleUpdate(row: RxReplicationWriteToMasterRow<RxDocType>): Promise<WithDeleted<RxDocType>[]> {
-    const query = this.options.supabaseClient
-        .from(this.table)
-        .update(row.newDocumentState, { count: 'exact' })
-        //.eq(this.primaryKey, (row.newDocumentState as any)[this.primaryKey])
-        .match(row.assumedMasterState!)  // TODO: Does not work for null and jsonb fields?
-    const { error, count } = await query
-    console.debug("Update request:", (query as any)['url'].toString())
-    if (error) throw error
-    if (count == 1) return []  // Success :)
+    const updateHandler = this.options.updateHandler ? this.options.updateHandler : this.defaultUpdateHandler.bind(this)
+    if (await updateHandler(row)) return []  // Success :)
     // Fetch current state and let conflict handler resolve it.
-    return [await this.fetchByPrimaryKey((row as any)[this.primaryKey])]
+    return [await this.fetchByPrimaryKey((row.newDocumentState as any)[this.primaryKey])]
+  }
+
+  /**
+   * Updates the row only if all database fields match the expected state.
+   */
+  private async defaultUpdateHandler(row: RxReplicationWriteToMasterRow<RxDocType>): Promise<boolean> {
+    let query = this.options.supabaseClient.from(this.table).update(row.newDocumentState, { count: 'exact' })
+    Object.entries(row.assumedMasterState!).forEach(([field, value]) => {
+      let type = typeof value
+      if (type === 'string' || type === 'number') {
+        query = query.eq(field, value)
+      } else if (type === 'boolean' || value === null) {
+        query = query.is(field, value)
+      } else {
+        throw `replicateSupabase: Unsupported field of type ${type}`
+      }
+    })
+    const { error, count } = await query
+    console.debug("Update request:", (query as any)['url'].toString(), "count", count)
+    if (error) throw error
+    return count == 1
   }
 
   private async fetchByPrimaryKey(primaryKeyValue: any): Promise<WithDeleted<RxDocType>>  {
