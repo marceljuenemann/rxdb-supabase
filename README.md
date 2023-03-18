@@ -1,11 +1,9 @@
 TODO:
-* push updates
-  * Enable nulls
-  * Conflicts test
-  * Test custom update handler
-* push deletes?
 * live pulling
 * add unit tests
+  * push deletes?
+    * Custom field as well
+  * Test custom update handler
 * pull rows with exact same timestamp
 * Check TODOs
 * Cleanup console stuff

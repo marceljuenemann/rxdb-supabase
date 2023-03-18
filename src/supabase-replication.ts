@@ -59,7 +59,9 @@ export class SupabaseReplication<RxDocType> {
 
     const { data, error } = await query
     if (error) throw error
-    if (data.length == 0) {
+
+    console.log('response', data)
+    if (data.length === 0) {
       console.log("No docs returned")
       return {
         checkpoint: lastCheckpoint,

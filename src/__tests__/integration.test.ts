@@ -14,13 +14,13 @@ import { RxDBDevModePlugin } from 'rxdb/plugins/dev-mode';
  * Integration test running against an actual Supabase instance.
  */
 // TODO: export schema into .sql file
-describe("replicateSupabase with actual SupabaseClient", () => {
+describe.skipIf(!process.env.TEST_SUPABASE_URL)("replicateSupabase with actual SupabaseClient", () => {
   let supabase: SupabaseClient
   let db: RxDatabase
   let collection: RxCollection<Human>
 
   beforeAll(() => {
-    supabase = createClient(process.env.SUPABASE_URL!, process.env.SUPABASE_API_KEY!)
+    supabase = createClient(process.env.TEST_SUPABASE_URL!, process.env.TEST_SUPABASE_API_KEY!)
     addRxPlugin(RxDBDevModePlugin);
   })
 
