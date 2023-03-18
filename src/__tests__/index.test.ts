@@ -1,11 +1,12 @@
-import { addRxPlugin, createRxDatabase, RxCollection, RxConflictHandler, RxConflictHandlerInput, RxDatabase } from "rxdb";
+import { addRxPlugin, createRxDatabase, RxCollection, RxConflictHandler, RxConflictHandlerInput, RxDatabase, RxError } from "rxdb";
 import { RxDBDevModePlugin } from "rxdb/plugins/dev-mode";
 import { RxReplicationState } from "rxdb/plugins/replication";
 import { getRxStorageMemory } from "rxdb/plugins/storage-memory";
 import { afterEach, beforeAll, beforeEach, describe, expect, it } from "vitest";
-import { replicateSupabase, SupabaseReplicationOptions } from "../index.js";
+import { replicateSupabase, SupabaseReplicationCheckpoint, SupabaseReplicationOptions } from "../index.js";
 import { Human, HUMAN_SCHEMA } from "./test-types.js";
 import { SupabaseBackendMock } from "./supabase-backend-mock.js";
+import { BehaviorSubject } from "rxjs";
 
 describe.only("replicateSupabase", () => {
   let supabaseMock: SupabaseBackendMock
@@ -18,7 +19,7 @@ describe.only("replicateSupabase", () => {
 
   beforeEach(async () => {
     // Create an in-memory RxDB database.
-    db = await createRxDatabase({name: 'test', storage: getRxStorageMemory()});
+    db = await createRxDatabase({name: 'test', storage: getRxStorageMemory(), ignoreDuplicate: true});
     collection = (await db.addCollections({
       humans: { schema: HUMAN_SCHEMA },
     }))['humans']
@@ -49,35 +50,33 @@ describe.only("replicateSupabase", () => {
 
       */
 
-      supabaseMock.expectQuery('humans', 'select=*&order=_modified.asc%2Cid.asc&limit=100').thenReturn([])
-
-      let replication = startReplication({push: undefined})
-      
-      await replication.awaitInSync()
-
-    })
-  })
-
-  describe("on client-side insertion", () => {
-    describe("without conflict", () => {
-      it("inserts into supabase", async () => {
-        /*
-        await replication({}, async() => {
-          await collection.insert({id: '2', name: 'Bob', age: null})
-        })
-
-        expect(await supabaseContents()).toEqual([
-          {id: '1', name: 'Alice', age: null, '_deleted': false},
-          {id: '2', name: 'Bob', age: null, '_deleted': false}
-        ])
-        */
+      expectInitialPull().thenReturn([])
+      await replication({}, async state => {
+        console.log("hi!")
       })
+
+      
     })
   })
 
+  /**
+   * Run the given transactions while a replication is running.
+   */
+  let replication = (options: Partial<SupabaseReplicationOptions<Human>> = {}, 
+                    transactions: (state: RxReplicationState<Human, SupabaseReplicationCheckpoint>) => Promise<void> = async() => {}):
+                    Promise<void> => {
+    const state = startReplication(options)
+    return rejectOnReplicationError(state, async () => {
+      await state.awaitInitialReplication()
+      await transactions(state)
+      await state.awaitInSync()
+      await state.cancel()
+    })
+    // TODO: Add unit tests for errors cases
+  }
 
   let startReplication = (options: Partial<SupabaseReplicationOptions<Human>> = {}): RxReplicationState<Human, SupabaseReplicationCheckpoint> => {
-    let status = replicateSupabase({
+    return replicateSupabase({
       replicationIdentifier: 'test',
       supabaseClient: supabaseMock.client,
       collection,
@@ -85,11 +84,26 @@ describe.only("replicateSupabase", () => {
       push: {},
       ...options
     })
-    // TODO: Add unit tests for errors thrown by supabse
-    status.error$.subscribe(error => {
-      console.error(error)
+  }
+
+  /**
+   * Runs the given callback, but rejects the returned Promise early in case there are any errors.
+   */
+  let rejectOnReplicationError = function <T>(state: RxReplicationState<Human, SupabaseReplicationCheckpoint>, callback: () => Promise<T>): Promise<T> {
+    return new Promise((resolve, reject) => {
+      state.error$.subscribe(error => {
+        console.error("Replication emitted an error:", error)
+        reject(error.rxdb ? error.parameters.errors![0] : error)
+      })
+      callback().then(
+        result => resolve(result),
+        error => reject(error)
+      )
     })
-    return status
+  }
+
+  let expectInitialPull = () => {
+    return supabaseMock.expectQuery('humans', 'select=*&order=_modified.asc%2Cid.asc&limit=100')
   }
 
   let resolveConflictWithName = <T>(name: string): RxConflictHandler<T> => {
@@ -107,6 +121,7 @@ describe.only("replicateSupabase", () => {
   }
 
   afterEach(async () => {
+    supabaseMock.verifyNoMoreQueriesExpected()
     await db.remove()
   })  
 })
