@@ -62,6 +62,7 @@ describe.only("replicateSupabase", () => {
   /**
    * Run the given transactions while a replication is running.
    */
+  // TODO: Move this into utility and 
   let replication = (options: Partial<SupabaseReplicationOptions<Human>> = {}, 
                     transactions: (state: RxReplicationState<Human, SupabaseReplicationCheckpoint>) => Promise<void> = async() => {}):
                     Promise<void> => {
