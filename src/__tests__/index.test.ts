@@ -27,16 +27,11 @@ describe.only("replicateSupabase", () => {
     // Supabase client with mocked HTTP.
     supabaseMock = new SupabaseBackendMock()
 
-    // Start with Alice?
-    /*
-    await replication({}, async() => {
-      // TODO: remove explicit null, should be set by pull anyways
-      await collection.insert({id: '1', name: 'Alice', age: null})
-    })
-
-    expect(await rxdbContents()).toEqual([{id: '1', name: 'Alice', age: null}])
-    expect(await supabaseContents()).toEqual([{id: '1', name: 'Alice', age: null, '_deleted': false}])
-    */
+    // Start with Alice in the database.
+    await collection.insert({id: '1', name: 'Alice', age: null})
+    expectInitialPull().thenReturn([])
+    expectInsert('{"id":"1","name":"Alice","age":null,"_deleted":false}').thenReturn()
+    await replication()
   })
 
   describe("initial replication", () => {
@@ -49,13 +44,13 @@ describe.only("replicateSupabase", () => {
       let select = mock()
 
       */
-
+/*
       expectInitialPull().thenReturn([])
       await replication({}, async state => {
         console.log("hi!")
       })
 
-      
+  */    
     })
   })
 
@@ -104,7 +99,14 @@ describe.only("replicateSupabase", () => {
   }
 
   let expectInitialPull = () => {
-    return supabaseMock.expectQuery('humans', 'select=*&order=_modified.asc%2Cid.asc&limit=100')
+    return supabaseMock.expectQuery('Initial pull', {
+      table: 'humans', 
+      params: 'select=*&order=_modified.asc%2Cid.asc&limit=100'}
+    )
+  }
+
+  let expectInsert = (body: string) => {
+    return supabaseMock.expectInsert('humans', body)
   }
 
   let resolveConflictWithName = <T>(name: string): RxConflictHandler<T> => {
