@@ -32,6 +32,9 @@ export class SupabaseBackendMock {
       thenReturn: (body: any = {}) => {
         const response = new Response(JSON.stringify(body), {status: 200, statusText: "OK"})
         this.expectedFetches.push({name, requestCheck, response: Promise.resolve(response)})
+      },
+      thenFail: (error: any = {}) => {
+        this.expectedFetches.push({name, requestCheck, response: Promise.reject(error)})
       }
     }
   }
@@ -54,7 +57,6 @@ export class SupabaseBackendMock {
   }
 
   verifyNoMoreQueriesExpected() {
-    console.log("afterEach remaining:", this.expectedFetches)
     expect(this.expectedFetches.map(exp => exp.name), 'Expected more Supabase calls').toEqual([])
   }
 

@@ -6,9 +6,9 @@ import { afterEach, beforeAll, beforeEach, describe, expect, it } from "vitest";
 import { replicateSupabase, SupabaseReplicationCheckpoint, SupabaseReplicationOptions } from "../index.js";
 import { Human, HumanRow, HUMAN_SCHEMA } from "./test-types.js";
 import { SupabaseBackendMock } from "./supabase-backend-mock.js";
-import { BehaviorSubject } from "rxjs";
+import { error } from "console";
 
-describe.only("replicateSupabase", () => {
+describe("replicateSupabase", () => {
   let supabaseMock: SupabaseBackendMock
   let db: RxDatabase
   let collection: RxCollection<Human>
@@ -26,14 +26,6 @@ describe.only("replicateSupabase", () => {
 
     // Supabase client with mocked HTTP.
     supabaseMock = new SupabaseBackendMock()
-
-    // Start with Alice in the database.
-    /*
-    await collection.insert({id: '1', name: 'Alice', age: null})
-    expectInitialPull().thenReturn([])
-    expectInsert('{"id":"1","name":"Alice","age":null,"_deleted":false}').thenReturn()
-    await replication()
-    */
   })
 
   describe("initial pull", () => {
@@ -83,42 +75,101 @@ describe.only("replicateSupabase", () => {
 
         // Expect three queries
         const BATCH_SIZE = 13
-        const humans = createHumans(BATCH_SIZE * 2 + 1)
+        const humans = createHumans(BATCH_SIZE * 2 + 3)
         expectPull(undefined, BATCH_SIZE).thenReturn(humans.slice(0, BATCH_SIZE))
         expectPull(expectedCheckpoint(BATCH_SIZE), BATCH_SIZE).thenReturn(humans.slice(BATCH_SIZE, BATCH_SIZE * 2))
         expectPull(expectedCheckpoint(BATCH_SIZE * 2), BATCH_SIZE).thenReturn(humans.slice(BATCH_SIZE * 2))
 
         await replication({pull: {batchSize: BATCH_SIZE}})
 
-        expect(await rxdbContents()).toHaveLength(BATCH_SIZE * 2 + 1)
+        expect(await rxdbContents()).toHaveLength(humans.length)
       })
     })
 
     describe("with query failing", () => {
       it.skip("retries automatically", async () => {
+        // TODO
       })
     })
 
     describe("with deletion", () => {
       it.skip("deletes row locally", async () => {
+        // TODO
       })
     })
 
     describe("with deletion and custom _delete field name", () => {
       it.skip("deletes row locally", async () => {
+        // TODO
       })
     })
+
+    // TODO: Test custom modified field
+  })
+
+  describe('with client-side insertion', () => {
+    describe('with single insertion', () => {
+      it('inserts row to supabase', async () => {
+        await collection.insert({id: '1', name: 'Alice', age: null})
+        expectPull().thenReturn([])
+        expectInsert('{"id":"1","name":"Alice","age":null,"_deleted":false}').thenReturn()
+
+        await replication()
+      })
+    })
+
+    describe('with multiple insertions', () => {
+      it('triggers multiple INSERT calls', async () => {
+        // TODO: Batch insertion would be nice in this case.
+        await collection.insert({id: '1', name: 'Alice', age: null})
+        await collection.insert({id: '2', name: 'Bob', age: 42})
+        expectPull().thenReturn([])
+        expectInsert('{"id":"1","name":"Alice","age":null,"_deleted":false}').thenReturn()
+        expectInsert('{"id":"2","name":"Bob","age":42,"_deleted":false}').thenReturn()
+
+        await replication()
+      })
+    })
+
+    describe('with custom _delete field', () => {
+      it('uses specified field', async () => {
+        await collection.insert({id: '1', name: 'Alice', age: null})
+        expectPull().thenReturn([])
+        expectInsert('{"id":"1","name":"Alice","age":null,"removed":false}').thenReturn()
+
+        await replication({deletedField: 'removed'})
+      })
+    })
+
+    describe('with network error', () => {
+      it('automatically retries', async () => {
+        await collection.insert({id: '1', name: 'Alice', age: null})
+        expectPull().thenReturn([])
+        expectInsert('{"id":"1","name":"Alice","age":null,"_deleted":false}').thenFail()
+        expectInsert('{"id":"1","name":"Alice","age":null,"_deleted":false}').thenReturn()
+
+        const errors = await replication({retryTime: 10}, async () => {}, true)
+        expect(errors).toHaveLength(1)
+      })
+    })
+
+    describe('with postgres error', () => {
+      it('automatically retries', async () => {
+        // TODO
+      })
+    })
+
+    describe('with duplicate key error', () => {
+      it('fetches current state and invokes conflict handler ', async () => {
+        // TODO
+      })
+    })
+
   })
 
 
   /*
   TODO
-  - with client-side insertion
-    - single
-    - multiple
-    - conflict handler
-    - query error
-    - custom field name
   - with client-side update
     - checks for equalty
     - throws on JSON types
@@ -135,20 +186,30 @@ describe.only("replicateSupabase", () => {
 
 
   /**
-   * Run the given transactions while a replication is running.
+   * Run the given callback while a replication is running. Also returns all errors
+   * that happened during the replication, and throws in case expectErrors is false.
    */
-  // TODO: Move this into utility and 
+  // TODO: Move this into a utility file
   let replication = (options: Partial<SupabaseReplicationOptions<Human>> = {}, 
-                    transactions: (state: RxReplicationState<Human, SupabaseReplicationCheckpoint>) => Promise<void> = async() => {}):
-                    Promise<void> => {
-    const state = startReplication(options)
-    return rejectOnReplicationError(state, async () => {
+                    callback: (state: RxReplicationState<Human, SupabaseReplicationCheckpoint>) => Promise<void> = async() => {},
+                    expectErrors: boolean = false): Promise<Error[]> => {
+    return new Promise(async (resolve, reject) => {
+      const errors: Error[] = []
+      const state = startReplication(options)
+      state.error$.subscribe(error => {
+        if (expectErrors) {
+          errors.push(error)
+        } else {
+          console.error("Replication emitted an unexpected error:", error)
+          reject(error.rxdb ? error.parameters.errors![0] : error)
+        }
+      })
       await state.awaitInitialReplication()
-      await transactions(state)
+      await callback(state)
       await state.awaitInSync()
       await state.cancel()
+      resolve(errors)
     })
-    // TODO: Add unit tests for errors cases
   }
 
   let startReplication = (options: Partial<SupabaseReplicationOptions<Human>> = {}): RxReplicationState<Human, SupabaseReplicationCheckpoint> => {
@@ -159,22 +220,6 @@ describe.only("replicateSupabase", () => {
       pull: {},
       push: {},
       ...options
-    })
-  }
-
-  /**
-   * Runs the given callback, but rejects the returned Promise early in case there are any errors.
-   */
-  let rejectOnReplicationError = function <T>(state: RxReplicationState<Human, SupabaseReplicationCheckpoint>, callback: () => Promise<T>): Promise<T> {
-    return new Promise((resolve, reject) => {
-      state.error$.subscribe(error => {
-        console.error("Replication emitted an error:", error)
-        reject(error.rxdb ? error.parameters.errors![0] : error)
-      })
-      callback().then(
-        result => resolve(result),
-        error => reject(error)
-      )
     })
   }
 
@@ -191,6 +236,7 @@ describe.only("replicateSupabase", () => {
     return supabaseMock.expectInsert('humans', body)
   }
 
+  // TODO: move to utility file
   let resolveConflictWithName = <T>(name: string): RxConflictHandler<T> => {
     return async (input: RxConflictHandlerInput<T>) => {
       return {
