@@ -1,8 +1,13 @@
+import { WithDeleted } from "rxdb";
 
 export interface Human {
   id: string,
   name: string,
   age: number | null
+}
+
+export type HumanRow = WithDeleted<Human> & {
+  _modified: string
 }
 
 export const HUMAN_SCHEMA = {

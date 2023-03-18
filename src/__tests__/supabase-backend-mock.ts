@@ -13,6 +13,7 @@ interface ExpectedFetch {
 /**
  * Runs a real SuperbaseClient against a mock backend by using a custom fetch implementation.
  */
+// TODO: Use fetch-mock package
 export class SupabaseBackendMock {
   readonly url = 'http://example.com/'
   readonly key = 'ABCDEF'
@@ -39,7 +40,8 @@ export class SupabaseBackendMock {
     let expectedUrl = `${this.url}rest/v1/${expected.table}`
     if (expected.params) expectedUrl += `?${expected.params}`
     return this.expectFetch(name, (input: URL | RequestInfo, options?: RequestInit | undefined) => {
-      expect(input.toString()).toEqual(expectedUrl)
+      // Use message to prevent output being truncated
+      expect(input.toString(), `Expected ${input.toString()} to equal ${expectedUrl}`).toEqual(expectedUrl)
       expect(options?.method).toEqual(expected.method || 'GET')
       expect(options?.body).toEqual(expected.body)
     })
