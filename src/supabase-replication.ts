@@ -172,7 +172,7 @@ export class SupabaseReplication<RxDocType> extends RxReplicationState<RxDocType
    * Pushes local changes to supabase.
    */
   private async pushHandler(rows: RxReplicationWriteToMasterRow<RxDocType>[]): Promise<WithDeleted<RxDocType>[]> {
-    if (rows.length != 1) throw 'Invalid batch size'
+    if (rows.length != 1) throw new Error('Invalid batch size')
     const row = rows[0]
   
     console.log("Pushing changes...", row.newDocumentState)
@@ -184,6 +184,7 @@ export class SupabaseReplication<RxDocType> extends RxReplicationState<RxDocType
    * Tries to insert a new row. Returns the current state of the row in case of a conflict. 
    */
   private async handleInsertion(doc: WithDeleted<RxDocType>): Promise<WithDeleted<RxDocType>[]> {
+try {
     const { error } = await this.options.supabaseClient.from(this.table).insert(doc)
     if (!error) {
       return []  // Success :)
@@ -193,6 +194,10 @@ export class SupabaseReplication<RxDocType> extends RxReplicationState<RxDocType
     } else {
       throw error  // TODO: add test
     }
+  } catch (e) {
+    console.error("INSERT error", e)
+    throw e
+  }
   }
 
   /**
@@ -218,7 +223,7 @@ export class SupabaseReplication<RxDocType> extends RxReplicationState<RxDocType
       } else if (type === 'boolean' || value === null) {
         query = query.is(field, value)
       } else {
-        throw `replicateSupabase: Unsupported field of type ${type}`
+        throw new Error(`replicateSupabase: Unsupported field of type ${type}`)
       }
     })
     const stuff = await query
@@ -245,10 +250,10 @@ export class SupabaseReplication<RxDocType> extends RxReplicationState<RxDocType
   private async fetchByPrimaryKey(primaryKeyValue: any): Promise<WithDeleted<RxDocType>>  {
     const { data, error } = await this.options.supabaseClient.from(this.table)
         .select()
-        .eq(this.primaryKey, this.postgRestEncode(primaryKeyValue))
+        .eq(this.primaryKey, /*this.postgRestEncode*/(primaryKeyValue))  // TODO: Test for problematic cases
         .limit(1)
     if (error) throw error
-    if (data.length != 1) throw 'No row with given primary key'
+    if (data.length != 1) throw new Error('No row with given primary key')
     return this.rowToRxDoc(data[0])
   }
 
@@ -267,6 +272,7 @@ export class SupabaseReplication<RxDocType> extends RxReplicationState<RxDocType
 
   private postgRestEncode(value: any): string {
     // TODO: add explanation
-    return JSON.stringify('' + value)
+    return value
+    //return JSON.stringify('' + value)
   }
 }

@@ -1,11 +1,11 @@
 TODO:
-* add missing integration tests
-  * add realtime field?
-  * cleanup / test helper
+* Integration tests
+  * Add essential tests
   * live pulling
   * pull rows with exact same timestamp
     * should be possible to test in integreation test by inserting multiple rows in one request
-* add unit tests
+* Unit tests
+  * Add essential tests
   * PostgREST escaping & tests
   * push deletes?
     * Custom field as well

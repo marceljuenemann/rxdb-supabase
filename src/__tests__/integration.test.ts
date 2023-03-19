@@ -10,6 +10,7 @@ import { RxReplicationState } from "rxdb/plugins/replication";
 import { addRxPlugin } from 'rxdb';
 import { RxDBDevModePlugin } from 'rxdb/plugins/dev-mode';
 import { lastValueFrom, take } from "rxjs";
+import { withReplication } from "./test-utils.js";
 
 /**
  * Integration test running against an actual Supabase instance.
@@ -64,7 +65,7 @@ describe.skipIf(!process.env.TEST_SUPABASE_URL)("replicateSupabase with actual S
 
     describe("with conflict", () => {
       describe("with default conflict handler", () => {
-        it.only("drops insertion", async () => {
+        it("drops insertion", async () => {
           await supabase.from('humans').insert({id: '2', name: 'Bob'})
           await collection.insert({id: '2', name: 'Bob 2', age: 2})
           await replication()
@@ -111,7 +112,33 @@ describe.skipIf(!process.env.TEST_SUPABASE_URL)("replicateSupabase with actual S
             {id: '1', name: 'Alice', age: 42, '_deleted': false}
           ])
         })
-      })    
+
+        describe.only("with postgREST special characters", () => {
+          it("updates supabase", async () => {
+            await collection.insert({id: 'special-,.()-id', name: 'Robert "Bob" Doe', age: null})
+            await replication()
+            expect(await supabaseContents()).toEqual([
+              {id: '1', name: 'Alice', age: null, _deleted: false},
+              {id: 'special-,.()-id', name: 'Robert "Bob" Doe', age: null, _deleted: false}
+            ])
+
+            let doc = await collection.findOne('special-,.()-id').exec()
+            await doc!.patch({age: 42})
+            console.log("should run now...")
+            await replication({}, async () => {
+              console.log("should run inside...")
+            })
+            expect(await rxdbContents()).toEqual([
+              {id: '1', name: 'Alice', age: null},
+              {id: 'special-,.()-id', name: 'Robert "Bob" Doe', age: 42}
+            ])
+            expect(await supabaseContents()).toEqual([
+              {id: '1', name: 'Alice', age: null, _deleted: false},
+              {id: 'special-,.()-id', name: 'Robert "Bob" Doe', age: 42, _deleted: false}
+            ])
+          })
+        })
+      })
 
       describe("with conflict", () => {
         beforeEach(async () => {
@@ -164,7 +191,7 @@ describe.skipIf(!process.env.TEST_SUPABASE_URL)("replicateSupabase with actual S
   describe("when supabase changed while online", () => {
     describe("without live replication", () => {
       it("does not pull new rows in realtime", async () => {
-        await replication({live: false}, async () => {
+        await replication({}, async () => {
           await supabase.from('humans').insert({id: '2', name: 'Bob', age: 42})
           await new Promise(resolve => setTimeout(() => resolve(true), 2000))  // Wait for some time
         })
@@ -177,7 +204,7 @@ describe.skipIf(!process.env.TEST_SUPABASE_URL)("replicateSupabase with actual S
 
     describe("with live replication", () => {
       it("pulls new rows in realtime", async () => {
-        await replication({live: true}, async (replication) => {
+        await replication({pull: {realtimePostgresChanges: true}}, async (replication) => {
           await supabase.from('humans').insert({id: '2', name: 'Bob', age: 42})
           await lastValueFrom(replication.remoteEvents$.pipe(take(1)))  // Wait for remote event
         })
@@ -190,12 +217,10 @@ describe.skipIf(!process.env.TEST_SUPABASE_URL)("replicateSupabase with actual S
     })
   });
 
-  let replication = async (options: Partial<SupabaseReplicationOptions<Human>> = {}, transactions: (replication: SupabaseReplication<Human>) => Promise<void> = async() => {}): Promise<void> => {
-    let replication = startReplication(options)
-    await replication.awaitInitialReplication()
-    await transactions(replication)
-    await replication.awaitInSync()
-    await replication.cancel()
+  let replication = (options: Partial<SupabaseReplicationOptions<Human>> = {},
+    callback: (state: RxReplicationState<Human, SupabaseReplicationCheckpoint>) => Promise<void> = async() => {},
+    expectErrors: boolean = false): Promise<Error[]> => {
+    return withReplication(() => startReplication(options), callback, expectErrors)
   }
 
   let startReplication = (options: Partial<SupabaseReplicationOptions<Human>> = {}): SupabaseReplication<Human> => {
@@ -206,10 +231,6 @@ describe.skipIf(!process.env.TEST_SUPABASE_URL)("replicateSupabase with actual S
       pull: {realtimePostgresChanges: false},
       push: {},
       ...options
-    })
-    // TODO: Add unit tests for errors thrown by supabse
-    status.error$.subscribe(error => {
-      console.error(error)
     })
     return status
   }

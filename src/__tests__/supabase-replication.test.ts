@@ -3,9 +3,10 @@ import { RxDBDevModePlugin } from "rxdb/plugins/dev-mode";
 import { RxReplicationState } from "rxdb/plugins/replication";
 import { getRxStorageMemory } from "rxdb/plugins/storage-memory";
 import { afterEach, beforeAll, beforeEach, describe, expect, it } from "vitest";
-import { SupabaseReplication, SupabaseReplicationCheckpoint, SupabaseReplicationOptions } from "../supabase-replication";
+import { SupabaseReplication, SupabaseReplicationCheckpoint, SupabaseReplicationOptions } from "../supabase-replication.js";
 import { Human, HumanRow, HUMAN_SCHEMA } from "./test-types.js";
 import { SupabaseBackendMock } from "./supabase-backend-mock.js";
+import { createHumans, createHuman, withReplication, resolveConflictWithName } from "./test-utils.js"
 
 describe.skipIf(process.env.TEST_SUPABASE_URL)("replicateSupabase", () => {
   let supabaseMock: SupabaseBackendMock
@@ -209,44 +210,22 @@ describe.skipIf(process.env.TEST_SUPABASE_URL)("replicateSupabase", () => {
 
   */
 
-
-  /**
-   * Run the given callback while a replication is running. Also returns all errors
-   * that happened during the replication, and throws in case expectErrors is false.
-   */
-  // TODO: Move this into a utility file
-  let replication = (options: Partial<SupabaseReplicationOptions<Human>> = {}, 
-                    callback: (state: RxReplicationState<Human, SupabaseReplicationCheckpoint>) => Promise<void> = async() => {},
-                    expectErrors: boolean = false): Promise<Error[]> => {
-    return new Promise(async (resolve, reject) => {
-      const errors: Error[] = []
-      const state = startReplication(options)
-      state.error$.subscribe(error => {
-        if (expectErrors) {
-          errors.push(error)
-        } else {
-          console.error("Replication emitted an unexpected error:", error)
-          reject(error.rxdb ? error.parameters.errors![0] : error)
-        }
-      })
-      await state.awaitInitialReplication()
-      await callback(state)
-      await state.awaitInSync()
-      await state.cancel()
-      resolve(errors)
-    })
+  let replication = (options: Partial<SupabaseReplicationOptions<Human>> = {},
+      callback: (state: RxReplicationState<Human, SupabaseReplicationCheckpoint>) => Promise<void> = async() => {},
+      expectErrors: boolean = false): Promise<Error[]> => {
+    return withReplication(() => startReplication(options), callback, expectErrors)
   }
 
-  let startReplication = (options: Partial<SupabaseReplicationOptions<Human>> = {}): RxReplicationState<Human, SupabaseReplicationCheckpoint> => {
-    return new SupabaseReplication({
+  let startReplication = (options: Partial<SupabaseReplicationOptions<Human>> = {}): SupabaseReplication<Human> => {
+    let status = new SupabaseReplication({
       replicationIdentifier: 'test',
       supabaseClient: supabaseMock.client,
       collection,
-      pull: {},
+      pull: {realtimePostgresChanges: false},
       push: {},
-      // TODO: disable live repl
       ...options
     })
+    return status
   }
 
   let expectPull = (checkpoint?: SupabaseReplicationCheckpoint, limit: number = 100, primaryKey: string = '', modifiedField: string = '_modified') => {
@@ -263,33 +242,9 @@ describe.skipIf(process.env.TEST_SUPABASE_URL)("replicateSupabase", () => {
     return supabaseMock.expectInsert('humans', body)
   }
 
-  // TODO: move to utility file
-  let resolveConflictWithName = <T>(name: string): RxConflictHandler<T> => {
-    return async (input: RxConflictHandlerInput<T>) => {
-      return {
-        isEqual: false,
-        documentData: {...input.newDocumentState, name}
-      }
-    }
-  }
-
   let rxdbContents = async (): Promise<Human[]> => {
     const results = await collection.find().exec()
     return results.map(doc => doc.toJSON())
-  }
-
-  let createHumans = (count: number) => {
-    return Array.from(Array(count).keys()).map(id => createHuman(id + 1))
-  }
-
-  let createHuman = (id: number): HumanRow => {
-    return {
-      id: id.toString(),
-      name: `Human ${id}`,
-      age: id % 2 == 0 ? null : id * 11,
-      _deleted: false,
-      _modified: '2023-' + id
-    }
   }
 
   afterEach(async () => {
