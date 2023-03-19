@@ -145,7 +145,7 @@ export class SupabaseReplication<RxDocType> extends RxReplicationState<RxDocType
     let query = this.options.supabaseClient.from(this.table).select()
     if (lastCheckpoint && lastCheckpoint.modified) {  // TODO: check modified
       // TODO: support rows with the exact same timestamp
-      query = query.gt(this.lastModifiedFieldName, lastCheckpoint.modified)
+      query = query.gt(this.lastModifiedFieldName, this.postgRestEncode(lastCheckpoint.modified))
     }
 
     query = query.order(this.lastModifiedFieldName)
@@ -213,15 +213,16 @@ export class SupabaseReplication<RxDocType> extends RxReplicationState<RxDocType
     Object.entries(row.assumedMasterState!).forEach(([field, value]) => {
       let type = typeof value
       if (type === 'string' || type === 'number') {
-        query = query.eq(field, value)
+        query = query.eq(field, this.postgRestEncode(value))
       } else if (type === 'boolean' || value === null) {
         query = query.is(field, value)
       } else {
         throw `replicateSupabase: Unsupported field of type ${type}`
       }
     })
-    const { error, count } = await query
-    console.debug("Update request:", (query as any)['url'].toString(), "count", count)
+    const stuff = await query
+    const { error, count } = stuff
+    console.debug("Update request:", (query as any)['url'].toString(), "count", count, stuff)
     if (error) throw error
     return count == 1
   }
@@ -243,7 +244,7 @@ export class SupabaseReplication<RxDocType> extends RxReplicationState<RxDocType
   private async fetchByPrimaryKey(primaryKeyValue: any): Promise<WithDeleted<RxDocType>>  {
     const { data, error } = await this.options.supabaseClient.from(this.table)
         .select()
-        .eq(this.primaryKey, primaryKeyValue)
+        .eq(this.primaryKey, this.postgRestEncode(primaryKeyValue))
         .limit(1)
     if (error) throw error
     if (data.length != 1) throw 'No row with given primary key'
@@ -262,5 +263,10 @@ export class SupabaseReplication<RxDocType> extends RxReplicationState<RxDocType
       modified: row[this.lastModifiedFieldName],
       primaryKeyValue: row[this.primaryKey]
     }
+  }
+
+  private postgRestEncode(value: any): string {
+    // TODO: add explanation
+    return JSON.stringify('' + value)
   }
 }

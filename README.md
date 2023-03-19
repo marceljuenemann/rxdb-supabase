@@ -1,15 +1,14 @@
 TODO:
-* live pulling
+* PostgREST escaping & tests
+* add missing integration tests
+  * cleanup / test helper
+  * live pulling
 * add unit tests
   * push deletes?
     * Custom field as well
   * Test custom update handler
-* add missing integration tests
-  * live pulling
-  * push only mode (maybe later?)
-* Test via webapp
-  * Multiple tabs
 * pull rows with exact same timestamp
+  * should be possible to test in integreation test by inserting multiple rows in one request
 * Check TODOs
 * Cleanup console stuff
 * Better documentation
@@ -18,6 +17,7 @@ TODO:
 * README
 
 Post-release
+* Push only mode
 * Batch insertion
 
 Notes:

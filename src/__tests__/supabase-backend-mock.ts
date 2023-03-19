@@ -29,8 +29,8 @@ export class SupabaseBackendMock {
 
   expectFetch(name: string, requestCheck: RequestCheck) {
     return {
-      thenReturn: (body: any = {}) => {
-        const response = new Response(JSON.stringify(body), {status: 200, statusText: "OK"})
+      thenReturn: (body: any = {}, headers: Record<string, string> = {}) => {
+        const response = new Response(JSON.stringify(body), {status: 200, statusText: "OK", headers})
         this.expectedFetches.push({name, requestCheck, response: Promise.resolve(response)})
       },
       thenFail: (error: any = {}) => {

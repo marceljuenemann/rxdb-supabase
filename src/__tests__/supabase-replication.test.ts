@@ -7,7 +7,7 @@ import { SupabaseReplication, SupabaseReplicationCheckpoint, SupabaseReplication
 import { Human, HumanRow, HUMAN_SCHEMA } from "./test-types.js";
 import { SupabaseBackendMock } from "./supabase-backend-mock.js";
 
-describe.skip("replicateSupabase", () => {
+describe.skipIf(process.env.TEST_SUPABASE_URL)("replicateSupabase", () => {
   let supabaseMock: SupabaseBackendMock
   let db: RxDatabase
   let collection: RxCollection<Human>
@@ -166,6 +166,32 @@ describe.skip("replicateSupabase", () => {
 
   })
 
+  // TODO: test for escaping of search params
+
+  describe('with client-side update', () => {
+    describe('without conflict', () => {
+      it('performs UPDATE with equality checks', async () => {
+        await collection.insert({id: '1', name: 'Alice', age: null})
+        expectPull().thenReturn([])
+        expectInsert('{"id":"1","name":"Alice","age":null,"_deleted":false}').thenReturn()
+
+        await replication({}, async (replication) => {
+          supabaseMock.expectQuery('UPDATE Alice', {
+            table: 'humans',
+            body: '{"id":"1","name":"Alice 2","age":42,"_deleted":false}',
+            params: 'id=eq.%221%22&name=eq.%22Alice%22&age=is.null&_deleted=is.false',
+            method: 'PATCH'
+          }).thenReturn({}, {'Content-Range': '0-1/1'})  // TODO: Not sure this is the correct header result
+          await collection.upsert({id: '1', name: 'Alice 2', age: 42})
+        })
+
+        expect(await rxdbContents()).toEqual([
+          {id: '1', name: 'Alice 2', age: 42}
+        ])
+      })
+    })
+  })
+
 
   /*
   TODO
@@ -225,7 +251,8 @@ describe.skip("replicateSupabase", () => {
 
   let expectPull = (checkpoint?: SupabaseReplicationCheckpoint, limit: number = 100, primaryKey: string = '', modifiedField: string = '_modified') => {
     // TODO: should be allowing for equal timestamp and have inequality for primary key.
-    const filter = checkpoint ? `&${modifiedField}=gt.${checkpoint.modified}` : ''
+    // TODO: test double quotes inside a search string
+    const filter = checkpoint ? `&${modifiedField}=gt.%22${checkpoint.modified}%22` : ''
     return supabaseMock.expectQuery(`Pull query with checkpoint ${checkpoint?.modified}`, {
       table: 'humans', 
       params: `select=*${filter}&order=_modified.asc%2Cid.asc&limit=${limit}`
