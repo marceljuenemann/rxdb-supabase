@@ -1,19 +1,24 @@
 TODO:
-* Integration tests
-  * Add essential tests
-  * live pulling
+* Missing Integration tests
 * Unit tests
   * Add essential tests
   * PostgREST escaping & tests
   * push deletes?
     * Custom field as well
   * Test custom update handler
+  * Test custom modified field
+  * Check other options to test
 * Check TODOs
 * Cleanup console stuff
 * Better documentation
 * format
 * lint
 * README
+* Release
+  * Test webhook
+  * NPM
+  * Make public
+  * test in webapp
 
 Post-release
 * Push only mode

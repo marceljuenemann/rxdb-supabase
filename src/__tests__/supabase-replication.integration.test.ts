@@ -14,8 +14,11 @@ import { withReplication } from "./test-utils.js";
 
 /**
  * Integration test running against an actual Supabase instance.
+ * 
+ * This test will only run if the TEST_SUPABASE_URL and TEST_SUPABASE_API_KEY environment
+ * variables are present. It requires a "humans" table to be created, see humans.sql for
+ * the table structure. 
  */
-// TODO: export schema into .sql file
 describe.skipIf(!process.env.TEST_SUPABASE_URL)("replicateSupabase with actual SupabaseClient", () => {
   let supabase: SupabaseClient
   let db: RxDatabase
@@ -196,11 +199,15 @@ describe.skipIf(!process.env.TEST_SUPABASE_URL)("replicateSupabase with actual S
 
       expect(await rxdbContents()).toHaveLength(3)
     })
+
+    // TODO: Test for UPDATE
+
+    // TODO: Test for DELETE
   })
 
   describe("when supabase changed while online", () => {
-    describe("without live replication", () => {
-      it("does not pull new rows in realtime", async () => {
+    describe("without realtime replication", () => {
+      it("does not pull new rows", async () => {
         await replication({}, async () => {
           await supabase.from('humans').insert({id: '2', name: 'Bob', age: 42})
           await new Promise(resolve => setTimeout(() => resolve(true), 2000))  // Wait for some time
@@ -212,8 +219,8 @@ describe.skipIf(!process.env.TEST_SUPABASE_URL)("replicateSupabase with actual S
       });
     })
 
-    describe("with live replication", () => {
-      it("pulls new rows in realtime", async () => {
+    describe("with realtime replication", () => {
+      it("pulls new rows", async () => {
         await replication({pull: {realtimePostgresChanges: true}}, async (replication) => {
           await supabase.from('humans').insert({id: '2', name: 'Bob', age: 42})
           await lastValueFrom(replication.remoteEvents$.pipe(take(1)))  // Wait for remote event
@@ -224,6 +231,10 @@ describe.skipIf(!process.env.TEST_SUPABASE_URL)("replicateSupabase with actual S
           {id: '2', name: 'Bob', age: 42}
         ])
       });
+
+      // TODO: UPDATE
+
+      // TODO: DELETE
     })
   });
 
