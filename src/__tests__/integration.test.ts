@@ -5,7 +5,7 @@ import { afterEach, beforeAll, beforeEach, describe, expect, it } from "vitest"
 import { createRxDatabase, RxCollection, RxConflictHandler, RxConflictHandlerInput, RxDatabase, WithDeleted } from "rxdb";
 import { getRxStorageMemory } from "rxdb/plugins/storage-memory";
 import { Human, HUMAN_SCHEMA } from "./test-types.js";
-import { replicateSupabase, SupabaseReplicationCheckpoint, SupabaseReplicationOptions } from "../supabase-replication.js";
+import { SupabaseReplication, SupabaseReplicationCheckpoint, SupabaseReplicationOptions } from "../supabase-replication.js";
 import { RxReplicationState } from "rxdb/plugins/replication";
 import { addRxPlugin } from 'rxdb';
 import { RxDBDevModePlugin } from 'rxdb/plugins/dev-mode';
@@ -194,7 +194,7 @@ describe.skipIf(!process.env.TEST_SUPABASE_URL)("replicateSupabase with actual S
   }
 
   let startReplication = (options: Partial<SupabaseReplicationOptions<Human>> = {}): RxReplicationState<Human, SupabaseReplicationCheckpoint> => {
-    let status = replicateSupabase({
+    let status = new SupabaseReplication({
       replicationIdentifier: 'test',
       supabaseClient: supabase,
       collection,

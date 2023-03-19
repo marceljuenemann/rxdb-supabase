@@ -82,46 +82,38 @@ export type SupabaseReplicationCheckpoint = {
   primaryKeyValue: string
 };
 
-// TODO: some documentation
-export function replicateSupabase<RxDocType>(options: SupabaseReplicationOptions<RxDocType>): RxReplicationState<RxDocType, SupabaseReplicationCheckpoint> {
-  const replicationState = new SupabaseReplication(options).replicationState
-  startReplicationOnLeaderShip(false, replicationState);
-  return replicationState;
-}
-
 // TODO: 
-export class SupabaseReplication<RxDocType> {
+export class SupabaseReplication<RxDocType> extends RxReplicationState<RxDocType, SupabaseReplicationCheckpoint>{
   private readonly table: string
   private readonly primaryKey: string
   private readonly lastModifiedFieldName: string
-  private readonly live: boolean
-
-  readonly replicationState: RxReplicationState<RxDocType, SupabaseReplicationCheckpoint>
 
   constructor(private options: SupabaseReplicationOptions<RxDocType>) {
+    super(
+      options.replicationIdentifier,
+      options.collection,
+      options.deletedField || DEFAULT_DELETED_FIELD,
+      options.pull && {
+        ...options.pull,
+        stream$: undefined,   // TODO: live updates
+        handler: (lastCheckpoint, batchSize) => this.pullHandler(lastCheckpoint, batchSize)
+      },
+      options.push && {
+        ...options.push,
+        batchSize: 1,         // TODO: support batch insertion
+        handler: (rows) => this.pushHandler(rows)
+      },
+      typeof options.live === 'undefined' ? true : options.live,
+      typeof options.retryTime === 'undefined' ? 5000 : options.retryTime,
+      typeof options.autoStart === 'undefined' ? true : options.autoStart
+    )
     this.table = options.table || options.collection.name
     this.primaryKey = options.primaryKey || options.collection.schema.primaryPath
     this.lastModifiedFieldName = options.lastModifiedFieldName || DEFAULT_LAST_MODIFIED_FIELD
-    this.live = typeof options.live === 'undefined' ? true : options.live
 
-    this.replicationState = new RxReplicationState<RxDocType, SupabaseReplicationCheckpoint>(
-      this.options.replicationIdentifier,
-      this.options.collection,
-      this.options.deletedField || DEFAULT_DELETED_FIELD,
-      this.options.pull && {
-        ...this.options.pull,
-        stream$: undefined,   // TODO: live updates
-        handler: this.pullHandler.bind(this)
-      },
-      this.options.push && {
-        ...this.options.push,
-        batchSize: 1,         // TODO: support batch insertion
-        handler: this.pushHandler.bind(this)
-      },
-      this.live,
-      typeof this.options.retryTime === 'undefined' ? 5000 : this.options.retryTime,
-      typeof this.options.autoStart === 'undefined' ? true : this.options.autoStart 
-    )
+    if (this.autoStart) {
+      this.start();
+    }
   }
 
   /**
