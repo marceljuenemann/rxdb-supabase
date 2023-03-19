@@ -148,11 +148,6 @@ describe.skipIf(!process.env.TEST_SUPABASE_URL)("replicateSupabase with actual S
 
   describe("when supabase changed while offline", () => {
     it("pulls new rows", async () => {
-      collection.conflictHandler = async (input, context) => {
-        console.error("Conflict handler invoked", input)
-        return { isEqual: false, documentData: input.realMasterState }
-      }
-
       await supabase.from('humans').insert({id: '2', name: 'Bob', age: 42})
       await replication()
 
@@ -163,12 +158,37 @@ describe.skipIf(!process.env.TEST_SUPABASE_URL)("replicateSupabase with actual S
     });
   });
 
+  describe("when supabase changed while online", () => {
+    describe("without live replication", () => {
+      it("does not pull new rows in realtime", async () => {
+        await replication({}, async () => {
+          await supabase.from('humans').insert({id: '2', name: 'Bob', age: 42})
+        })
+  
+        expect(await rxdbContents()).toEqual([
+          {id: '1', name: 'Alice', age: null}
+        ])
+      });
+    })
+
+    describe("with live replication", () => {
+      it("pulls new rows in realtime", async () => {
+        await replication({}, async () => {
+            await supabase.from('humans').insert({id: '2', name: 'Bob', age: 42})
+        })
+  
+        expect(await rxdbContents()).toEqual([
+          {id: '1', name: 'Alice', age: null},
+          {id: '2', name: 'Bob', age: 42}
+        ])
+      });
+    })
+  });
+
   let replication = async (options: Partial<SupabaseReplicationOptions<Human>> = {}, transactions: () => Promise<void> = async() => {}): Promise<void> => {
     let replication = startReplication(options)
     await replication.awaitInitialReplication()
     await transactions()
-    await replication.awaitInSync()
-    replication.reSync()  // TODO: should not be necessary with live replication
     await replication.awaitInSync()
     await replication.cancel()
   }

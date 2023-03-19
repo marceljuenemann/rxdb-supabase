@@ -4,6 +4,11 @@ TODO:
   * push deletes?
     * Custom field as well
   * Test custom update handler
+* add missing integration tests
+  * live pulling
+  * push only mode (maybe later?)
+* Test via webapp
+  * Multiple tabs
 * pull rows with exact same timestamp
 * Check TODOs
 * Cleanup console stuff
@@ -41,7 +46,9 @@ Future project:
     supported by superbase and rxdb)
 
 
+To run integration tests, set enviornment variables TEST_SUPABASE_URL and TEST_SUPABASE_API_KEY
 
+Call resync when online again?
 
 # Typescript Library Starter
 
