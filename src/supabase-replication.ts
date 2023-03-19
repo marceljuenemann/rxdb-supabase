@@ -14,7 +14,7 @@ export class SupabaseReplication<RxDocType> {
   private readonly live: boolean
 
   readonly replicationState: RxReplicationState<RxDocType, SupabaseReplicationCheckpoint>
-  
+
   constructor(private options: SupabaseReplicationOptions<RxDocType>) {
     this.table = options.table || options.collection.name
     this.primaryKey = options.primaryKey || options.collection.schema.primaryPath
@@ -48,7 +48,7 @@ export class SupabaseReplication<RxDocType> {
     console.log("Pulling changes since", lastCheckpoint?.modified)
 
     let query = this.options.supabaseClient.from(this.table).select()
-    if (lastCheckpoint) {
+    if (lastCheckpoint && lastCheckpoint.modified) {  // TODO: check modified
       // TODO: support rows with the exact same timestamp
       query = query.gt(this.lastModifiedFieldName, lastCheckpoint.modified)
     }

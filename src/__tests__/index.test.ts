@@ -6,7 +6,6 @@ import { afterEach, beforeAll, beforeEach, describe, expect, it } from "vitest";
 import { replicateSupabase, SupabaseReplicationCheckpoint, SupabaseReplicationOptions } from "../index.js";
 import { Human, HumanRow, HUMAN_SCHEMA } from "./test-types.js";
 import { SupabaseBackendMock } from "./supabase-backend-mock.js";
-import { error } from "console";
 
 describe("replicateSupabase", () => {
   let supabaseMock: SupabaseBackendMock
