@@ -43,17 +43,3 @@ export function resolveConflictWithName<T>(name: string): RxConflictHandler<T> {
     }
   }
 }
-
-export function createHumans(count: number) {
-  return Array.from(Array(count).keys()).map(id => createHuman(id + 1))
-}
-
-export function createHuman(id: number): HumanRow {
-  return {
-    id: id.toString(),
-    name: `Human ${id}`,
-    age: id % 2 == 0 ? null : id * 11,
-    _deleted: false,
-    _modified: '2023-' + id
-  }
-}

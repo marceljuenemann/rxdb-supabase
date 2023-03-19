@@ -10,7 +10,7 @@ import { RxReplicationState } from "rxdb/plugins/replication";
 import { addRxPlugin } from 'rxdb';
 import { RxDBDevModePlugin } from 'rxdb/plugins/dev-mode';
 import { lastValueFrom, take } from "rxjs";
-import { withReplication } from "./test-utils.js";
+import { createHumans, withReplication } from "./test-utils.js";
 
 /**
  * Integration test running against an actual Supabase instance.
@@ -113,21 +113,21 @@ describe.skipIf(!process.env.TEST_SUPABASE_URL)("replicateSupabase with actual S
           ])
         })
 
-        describe.only("with postgREST special characters", () => {
+        describe("with postgREST special characters", () => {
           it("updates supabase", async () => {
+            // Prepare database with rows that contain special characters.
             await collection.insert({id: 'special-,.()-id', name: 'Robert "Bob" Doe', age: null})
             await replication()
             expect(await supabaseContents()).toEqual([
               {id: '1', name: 'Alice', age: null, _deleted: false},
               {id: 'special-,.()-id', name: 'Robert "Bob" Doe', age: null, _deleted: false}
             ])
-
             let doc = await collection.findOne('special-,.()-id').exec()
+
+            // The UPDATE query will now contain the special characters in the URL params.
             await doc!.patch({age: 42})
-            console.log("should run now...")
-            await replication({}, async () => {
-              console.log("should run inside...")
-            })
+            await replication()
+
             expect(await rxdbContents()).toEqual([
               {id: '1', name: 'Alice', age: null},
               {id: 'special-,.()-id', name: 'Robert "Bob" Doe', age: 42}
@@ -185,8 +185,22 @@ describe.skipIf(!process.env.TEST_SUPABASE_URL)("replicateSupabase with actual S
         {id: '1', name: 'Alice', age: null},
         {id: '2', name: 'Bob', age: 42}
       ])
-    });
-  });
+    })
+
+    it.only("pulls rows in multiple batches", async () => {
+      // In this test, we set the batchSize to 1, but insert multiple rows into supabase such that
+      // they have the same _modified timestamp. The test will only pass if the pull query fetches
+      // rows with the same timestamp as the last checkpoint (but higher primary key). 
+      const {error} = await supabase.from('humans').insert([
+        {id: '2', name: 'Human 2'},
+        {id: '3', name: 'Human 3'},
+      ])
+      if (error) throw error
+      await replication({pull: {batchSize: 1}})
+
+      expect(await rxdbContents()).toHaveLength(3)
+    })
+  })
 
   describe("when supabase changed while online", () => {
     describe("without live replication", () => {

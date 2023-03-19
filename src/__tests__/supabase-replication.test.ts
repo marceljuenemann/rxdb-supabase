@@ -180,7 +180,7 @@ describe.skipIf(process.env.TEST_SUPABASE_URL)("replicateSupabase", () => {
           supabaseMock.expectQuery('UPDATE Alice', {
             table: 'humans',
             body: '{"id":"1","name":"Alice 2","age":42,"_deleted":false}',
-            params: 'id=eq.%221%22&name=eq.%22Alice%22&age=is.null&_deleted=is.false',
+            params: 'id=eq.1&name=eq.Alice&age=is.null&_deleted=is.false',
             method: 'PATCH'
           }).thenReturn({}, {'Content-Range': '0-1/1'})  // TODO: Not sure this is the correct header result
           await collection.upsert({id: '1', name: 'Alice 2', age: 42})
@@ -231,7 +231,7 @@ describe.skipIf(process.env.TEST_SUPABASE_URL)("replicateSupabase", () => {
   let expectPull = (checkpoint?: SupabaseReplicationCheckpoint, limit: number = 100, primaryKey: string = '', modifiedField: string = '_modified') => {
     // TODO: should be allowing for equal timestamp and have inequality for primary key.
     // TODO: test double quotes inside a search string
-    const filter = checkpoint ? `&${modifiedField}=gt.%22${checkpoint.modified}%22` : ''
+    const filter = checkpoint ? `&${modifiedField}=gt.${checkpoint.modified}` : ''
     return supabaseMock.expectQuery(`Pull query with checkpoint ${checkpoint?.modified}`, {
       table: 'humans', 
       params: `select=*${filter}&order=_modified.asc%2Cid.asc&limit=${limit}`
@@ -245,6 +245,20 @@ describe.skipIf(process.env.TEST_SUPABASE_URL)("replicateSupabase", () => {
   let rxdbContents = async (): Promise<Human[]> => {
     const results = await collection.find().exec()
     return results.map(doc => doc.toJSON())
+  }
+
+  let createHumans = (count: number): HumanRow[] => {
+    return Array.from(Array(count).keys()).map(id => createHuman(id + 1))
+  }
+
+  let createHuman = (id: number): HumanRow => {
+    return {
+      id: id.toString(),
+      name: `Human ${id}`,
+      age: id % 2 == 0 ? null : id * 11,
+      _deleted: false,
+      _modified: '2023-' + id
+    }
   }
 
   afterEach(async () => {
