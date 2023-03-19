@@ -1,14 +1,15 @@
 TODO:
-* PostgREST escaping & tests
 * add missing integration tests
+  * add realtime field?
   * cleanup / test helper
   * live pulling
+  * pull rows with exact same timestamp
+    * should be possible to test in integreation test by inserting multiple rows in one request
 * add unit tests
+  * PostgREST escaping & tests
   * push deletes?
     * Custom field as well
   * Test custom update handler
-* pull rows with exact same timestamp
-  * should be possible to test in integreation test by inserting multiple rows in one request
 * Check TODOs
 * Cleanup console stuff
 * Better documentation

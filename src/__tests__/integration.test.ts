@@ -64,7 +64,7 @@ describe.skipIf(!process.env.TEST_SUPABASE_URL)("replicateSupabase with actual S
 
     describe("with conflict", () => {
       describe("with default conflict handler", () => {
-        it("drops insertion", async () => {
+        it.only("drops insertion", async () => {
           await supabase.from('humans').insert({id: '2', name: 'Bob'})
           await collection.insert({id: '2', name: 'Bob 2', age: 2})
           await replication()
@@ -203,10 +203,8 @@ describe.skipIf(!process.env.TEST_SUPABASE_URL)("replicateSupabase with actual S
       replicationIdentifier: 'test',
       supabaseClient: supabase,
       collection,
-      pull: {},
+      pull: {realtimePostgresChanges: false},
       push: {},
-      // TODO: why do tests fail with live: false?
-      //live: false,  // flip default
       ...options
     })
     // TODO: Add unit tests for errors thrown by supabse

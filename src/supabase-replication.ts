@@ -28,45 +28,46 @@ export type SupabaseReplicationOptions<RxDocType> = {
   primaryKey?: string,
 
   /**
-   * The name of the supabase field that is automatically updated to the last
-   * modified timestamp by postgres. This field is required for the pull sync
-   * to work and can easily be implemented with moddatetime in supabase.
-   * @default '_modified'
-   */
-  lastModifiedFieldName?: string,
-
-  /**
-   * Whether the last modified field is part of the collection, or only exists
-   * in the supabase table.
-   * @default false
-   */
-  // TODO: automatically determine this from the collection
-  lastModifiedFieldInCollection?: boolean,
-
-  /**
    * Options for pulling data from supabase. Set to {} to pull with the default
    * options, as no data will be pulled if the field is absent.
    */
-  pull?: Omit<ReplicationPullOptions<RxDocType, SupabaseReplicationCheckpoint>, 'handler' | 'stream$'>;
+  pull?: Omit<ReplicationPullOptions<RxDocType, SupabaseReplicationCheckpoint>, 'handler' | 'stream$'> & {
+    /**
+     * Whether to subscribe to realtime Postgres changes for the table. If set to false,
+     * only an initial pull will be performed. Only has an effect if the live option is set
+     * to true.
+     * @default true
+     */
+    realtimePostgresChanges?: boolean,
+
+    /**
+     * The name of the supabase field that is automatically updated to the last
+     * modified timestamp by postgres. This field is required for the pull sync
+     * to work and can easily be implemented with moddatetime in supabase.
+     * @default '_modified'
+     */
+    lastModifiedFieldName?: string
+  },
 
   /**
    * Options for pushing data to supabase. Set to {} to push with the default
    * options, as no data will be pushed if the field is absent.
    */
   // TODO: enable custom batch size (currently always one row at a time)
-  push?: Omit<ReplicationPushOptions<RxDocType>, 'handler' | 'batchSize'>,
-
-  /**
-   * Handler for pushing row updates to supabase. Must return true iff the UPDATE was
-   * applied to the supabase table. Returning false signalises a write conflict, in
-   * which case the current state of the row will be fetched from supabase and passed to
-   * the RxDB collection's conflict handler.
-   * @default the default handler will update the row only iff all fields match the
-   * local state (before the update was applied), otherwise the conflict handler is
-   * invoked. The default handler does not support JSON fields at the moment.
-   */
-  // TODO: Support JSON fields
-  updateHandler?: (row: RxReplicationWriteToMasterRow<RxDocType>) => Promise<boolean>
+  push?: Omit<ReplicationPushOptions<RxDocType>, 'handler' | 'batchSize'> & {
+    /**
+     * Handler for pushing row updates to supabase. Must return true iff the UPDATE was
+     * applied to the supabase table. Returning false signalises a write conflict, in
+     * which case the current state of the row will be fetched from supabase and passed to
+     * the RxDB collection's conflict handler.
+     * @default the default handler will update the row only iff all fields match the
+     * local state (before the update was applied), otherwise the conflict handler is
+     * invoked. The default handler does not support JSON fields at the moment.
+     */
+    // TODO: Support JSON fields
+    // TODO: Unit tests
+    updateHandler?: (row: RxReplicationWriteToMasterRow<RxDocType>) => Promise<boolean>
+  },
 } & Omit<
   // We don't support waitForLeadership. You should just run in a SharedWorker anyways, no?
   ReplicationOptions<RxDocType, any>, 'pull' | 'push' | 'waitForLeadership'
@@ -115,7 +116,7 @@ export class SupabaseReplication<RxDocType> extends RxReplicationState<RxDocType
     this.realtimeChanges = realtimeChanges
     this.table = options.table || options.collection.name
     this.primaryKey = options.primaryKey || options.collection.schema.primaryPath
-    this.lastModifiedFieldName = options.lastModifiedFieldName || DEFAULT_LAST_MODIFIED_FIELD
+    this.lastModifiedFieldName = options.pull?.lastModifiedFieldName || DEFAULT_LAST_MODIFIED_FIELD
 
     if (this.autoStart) {
       this.start();
@@ -123,7 +124,7 @@ export class SupabaseReplication<RxDocType> extends RxReplicationState<RxDocType
   }
 
   public override async start(): Promise<void> {
-    if (this.live && this.options.pull) {
+    if (this.live && this.options.pull && (this.options.pull.realtimePostgresChanges || typeof this.options.pull.realtimePostgresChanges === 'undefined')) {
       this.watchPostgresChanges();
     }
     return super.start()
@@ -199,7 +200,7 @@ export class SupabaseReplication<RxDocType> extends RxReplicationState<RxDocType
    * state is fetched and passed to the conflict handler. 
    */
   private async handleUpdate(row: RxReplicationWriteToMasterRow<RxDocType>): Promise<WithDeleted<RxDocType>[]> {
-    const updateHandler = this.options.updateHandler ? this.options.updateHandler : this.defaultUpdateHandler.bind(this)
+    const updateHandler = this.options.push?.updateHandler || this.defaultUpdateHandler.bind(this)
     if (await updateHandler(row)) return []  // Success :)
     // Fetch current state and let conflict handler resolve it.
     return [await this.fetchByPrimaryKey((row.newDocumentState as any)[this.primaryKey])]
@@ -252,9 +253,8 @@ export class SupabaseReplication<RxDocType> extends RxReplicationState<RxDocType
   }
 
   private rowToRxDoc(row: any): WithDeleted<RxDocType> {
-    if (!this.options.lastModifiedFieldInCollection) {
-      delete row[this.lastModifiedFieldName]
-    }
+    // TODO: Don't delete the field if it is actually part of the collection
+    delete row[this.lastModifiedFieldName]
     return row as WithDeleted<RxDocType>
   }
 
