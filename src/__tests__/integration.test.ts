@@ -9,6 +9,7 @@ import { SupabaseReplication, SupabaseReplicationCheckpoint, SupabaseReplication
 import { RxReplicationState } from "rxdb/plugins/replication";
 import { addRxPlugin } from 'rxdb';
 import { RxDBDevModePlugin } from 'rxdb/plugins/dev-mode';
+import { lastValueFrom, take } from "rxjs";
 
 /**
  * Integration test running against an actual Supabase instance.
@@ -39,6 +40,8 @@ describe.skipIf(!process.env.TEST_SUPABASE_URL)("replicateSupabase with actual S
     await replication({}, async() => {
       // TODO: remove explicit null, should be set by pull anyways
       await collection.insert({id: '1', name: 'Alice', age: null})
+
+
     })
 
     expect(await rxdbContents()).toEqual([{id: '1', name: 'Alice', age: null}])
@@ -161,8 +164,9 @@ describe.skipIf(!process.env.TEST_SUPABASE_URL)("replicateSupabase with actual S
   describe("when supabase changed while online", () => {
     describe("without live replication", () => {
       it("does not pull new rows in realtime", async () => {
-        await replication({}, async () => {
+        await replication({live: false}, async () => {
           await supabase.from('humans').insert({id: '2', name: 'Bob', age: 42})
+          await new Promise(resolve => setTimeout(() => resolve(true), 2000))  // Wait for some time
         })
   
         expect(await rxdbContents()).toEqual([
@@ -173,8 +177,9 @@ describe.skipIf(!process.env.TEST_SUPABASE_URL)("replicateSupabase with actual S
 
     describe("with live replication", () => {
       it("pulls new rows in realtime", async () => {
-        await replication({}, async () => {
-            await supabase.from('humans').insert({id: '2', name: 'Bob', age: 42})
+        await replication({live: true}, async (replication) => {
+          await supabase.from('humans').insert({id: '2', name: 'Bob', age: 42})
+          await lastValueFrom(replication.remoteEvents$.pipe(take(1)))  // Wait for remote event
         })
   
         expect(await rxdbContents()).toEqual([
@@ -185,21 +190,23 @@ describe.skipIf(!process.env.TEST_SUPABASE_URL)("replicateSupabase with actual S
     })
   });
 
-  let replication = async (options: Partial<SupabaseReplicationOptions<Human>> = {}, transactions: () => Promise<void> = async() => {}): Promise<void> => {
+  let replication = async (options: Partial<SupabaseReplicationOptions<Human>> = {}, transactions: (replication: SupabaseReplication<Human>) => Promise<void> = async() => {}): Promise<void> => {
     let replication = startReplication(options)
     await replication.awaitInitialReplication()
-    await transactions()
+    await transactions(replication)
     await replication.awaitInSync()
     await replication.cancel()
   }
 
-  let startReplication = (options: Partial<SupabaseReplicationOptions<Human>> = {}): RxReplicationState<Human, SupabaseReplicationCheckpoint> => {
+  let startReplication = (options: Partial<SupabaseReplicationOptions<Human>> = {}): SupabaseReplication<Human> => {
     let status = new SupabaseReplication({
       replicationIdentifier: 'test',
       supabaseClient: supabase,
       collection,
       pull: {},
       push: {},
+      // TODO: why do tests fail with live: false?
+      //live: false,  // flip default
       ...options
     })
     // TODO: Add unit tests for errors thrown by supabse

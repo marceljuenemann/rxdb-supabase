@@ -1,6 +1,7 @@
-import { SupabaseClient } from "@supabase/supabase-js"
-import { ReplicationPullHandlerResult, RxReplicationWriteToMasterRow, WithDeleted } from "rxdb"
+import { RealtimeChannel, SupabaseClient } from "@supabase/supabase-js"
+import { ReplicationPullHandlerResult, RxReplicationPullStreamItem, RxReplicationWriteToMasterRow, WithDeleted } from "rxdb"
 import { RxReplicationState, startReplicationOnLeaderShip } from "rxdb/plugins/replication"
+import { Subject } from "rxjs"
 import { ReplicationOptions, ReplicationPullOptions, ReplicationPushOptions } from "./rxdb-internal-types.js"
 
 const DEFAULT_LAST_MODIFIED_FIELD = '_modified'
@@ -88,14 +89,18 @@ export class SupabaseReplication<RxDocType> extends RxReplicationState<RxDocType
   private readonly primaryKey: string
   private readonly lastModifiedFieldName: string
 
+  private readonly realtimeChanges: Subject<RxReplicationPullStreamItem<RxDocType, SupabaseReplicationCheckpoint>>
+  private realtimeChannel?: RealtimeChannel
+
   constructor(private options: SupabaseReplicationOptions<RxDocType>) {
+    const realtimeChanges: Subject<RxReplicationPullStreamItem<RxDocType, SupabaseReplicationCheckpoint>> = new Subject()
     super(
       options.replicationIdentifier,
       options.collection,
       options.deletedField || DEFAULT_DELETED_FIELD,
       options.pull && {
         ...options.pull,
-        stream$: undefined,   // TODO: live updates
+        stream$: realtimeChanges,
         handler: (lastCheckpoint, batchSize) => this.pullHandler(lastCheckpoint, batchSize)
       },
       options.push && {
@@ -107,6 +112,7 @@ export class SupabaseReplication<RxDocType> extends RxReplicationState<RxDocType
       typeof options.retryTime === 'undefined' ? 5000 : options.retryTime,
       typeof options.autoStart === 'undefined' ? true : options.autoStart
     )
+    this.realtimeChanges = realtimeChanges
     this.table = options.table || options.collection.name
     this.primaryKey = options.primaryKey || options.collection.schema.primaryPath
     this.lastModifiedFieldName = options.lastModifiedFieldName || DEFAULT_LAST_MODIFIED_FIELD
@@ -114,6 +120,20 @@ export class SupabaseReplication<RxDocType> extends RxReplicationState<RxDocType
     if (this.autoStart) {
       this.start();
     }
+  }
+
+  public override async start(): Promise<void> {
+    if (this.live && this.options.pull) {
+      this.watchPostgresChanges();
+    }
+    return super.start()
+  } 
+
+  public override async cancel(): Promise<any> {
+    if (this.realtimeChannel) {
+      return Promise.all([super.cancel(), this.realtimeChannel.unsubscribe()])
+    }
+    return super.cancel()
   }
 
   /**
@@ -134,28 +154,16 @@ export class SupabaseReplication<RxDocType> extends RxReplicationState<RxDocType
 
     const { data, error } = await query
     if (error) throw error
-
-    console.log('response', data)
-    if (data.length === 0) {
-      console.log("No docs returned")
+    if (data.length == 0) {
       return {
         checkpoint: lastCheckpoint,
         documents: []
       }
-    }
-
-    const lastDoc = data[data.length - 1]
-    const newCheckpoint: SupabaseReplicationCheckpoint = {
-      modified: lastDoc[this.lastModifiedFieldName],
-      primaryKeyValue: lastDoc[this.primaryKey]
-    }
-    const newDocs = data.map(this.rowToRxDoc.bind(this))
-
-    console.log("New checkpoint", newCheckpoint)
-    console.log("New docs", newDocs)
-    return {
-      checkpoint: newCheckpoint,
-      documents: newDocs
+    } else {
+      return {
+        checkpoint: this.rowToCheckpoint(data[data.length - 1]),
+        documents: data.map(this.rowToRxDoc.bind(this))
+      }
     }
   }
 
@@ -218,6 +226,20 @@ export class SupabaseReplication<RxDocType> extends RxReplicationState<RxDocType
     return count == 1
   }
 
+  private watchPostgresChanges() {
+    this.realtimeChannel = this.options.supabaseClient
+      .channel('any')
+      .on('postgres_changes', { event: '*', schema: 'public', table: this.table }, payload => {
+        if (payload.eventType === 'DELETE' || !payload.new) return  // Should have set _deleted field already
+        console.log('Change received!', payload)
+        this.realtimeChanges.next({
+          checkpoint: this.rowToCheckpoint(payload.new),
+          documents: [this.rowToRxDoc(payload.new)]
+        })
+      })
+      .subscribe()
+  }
+
   private async fetchByPrimaryKey(primaryKeyValue: any): Promise<WithDeleted<RxDocType>>  {
     const { data, error } = await this.options.supabaseClient.from(this.table)
         .select()
@@ -233,5 +255,12 @@ export class SupabaseReplication<RxDocType> extends RxReplicationState<RxDocType
       delete row[this.lastModifiedFieldName]
     }
     return row as WithDeleted<RxDocType>
+  }
+
+  private rowToCheckpoint(row: any): SupabaseReplicationCheckpoint {
+    return {
+      modified: row[this.lastModifiedFieldName],
+      primaryKeyValue: row[this.primaryKey]
+    }
   }
 }

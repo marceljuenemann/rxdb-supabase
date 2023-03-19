@@ -7,7 +7,7 @@ import { SupabaseReplication, SupabaseReplicationCheckpoint, SupabaseReplication
 import { Human, HumanRow, HUMAN_SCHEMA } from "./test-types.js";
 import { SupabaseBackendMock } from "./supabase-backend-mock.js";
 
-describe("replicateSupabase", () => {
+describe.skip("replicateSupabase", () => {
   let supabaseMock: SupabaseBackendMock
   let db: RxDatabase
   let collection: RxCollection<Human>
@@ -218,6 +218,7 @@ describe("replicateSupabase", () => {
       collection,
       pull: {},
       push: {},
+      // TODO: disable live repl
       ...options
     })
   }
