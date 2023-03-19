@@ -6,7 +6,7 @@ import { afterEach, beforeAll, beforeEach, describe, expect, it } from "vitest";
 import { SupabaseReplication, SupabaseReplicationCheckpoint, SupabaseReplicationOptions } from "../supabase-replication.js";
 import { Human, HumanRow, HUMAN_SCHEMA } from "./test-types.js";
 import { SupabaseBackendMock } from "./supabase-backend-mock.js";
-import { createHumans, createHuman, withReplication, resolveConflictWithName } from "./test-utils.js"
+import { withReplication, resolveConflictWithName } from "./test-utils.js"
 
 describe.skipIf(process.env.TEST_SUPABASE_URL)("replicateSupabase", () => {
   let supabaseMock: SupabaseBackendMock

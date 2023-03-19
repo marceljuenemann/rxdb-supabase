@@ -200,9 +200,30 @@ describe.skipIf(!process.env.TEST_SUPABASE_URL)("replicateSupabase with actual S
       expect(await rxdbContents()).toHaveLength(3)
     })
 
-    // TODO: Test for UPDATE
+    it("pulls updated rows", async () => {
+      await supabase.from('humans').update({age: 42}).eq('id', '1')
+      await replication()
 
-    // TODO: Test for DELETE
+      expect(await rxdbContents()).toEqual([
+        {id: '1', name: 'Alice', age: 42}
+      ])
+    })
+
+    it("removes rows marked as deleted", async () => {
+      await supabase.from('humans').update({_deleted: true}).eq('id', '1')
+      await replication()
+
+      expect(await rxdbContents()).toEqual([])
+    })
+
+    it("ignores actually deleted rows", async () => {
+      await supabase.from('humans').delete().eq('id', '1')
+      await replication()
+
+      expect(await rxdbContents()).toEqual([
+        {id: '1', name: 'Alice', age: null}
+      ])
+    })
   })
 
   describe("when supabase changed while online", () => {
@@ -210,7 +231,7 @@ describe.skipIf(!process.env.TEST_SUPABASE_URL)("replicateSupabase with actual S
       it("does not pull new rows", async () => {
         await replication({}, async () => {
           await supabase.from('humans').insert({id: '2', name: 'Bob', age: 42})
-          await new Promise(resolve => setTimeout(() => resolve(true), 2000))  // Wait for some time
+          await new Promise(resolve => setTimeout(() => resolve(true), 1000))  // Wait for some time
         })
   
         expect(await rxdbContents()).toEqual([
@@ -232,9 +253,36 @@ describe.skipIf(!process.env.TEST_SUPABASE_URL)("replicateSupabase with actual S
         ])
       });
 
-      // TODO: UPDATE
+      it("pulls updated rows", async () => {
+        await replication({pull: {realtimePostgresChanges: true}}, async (replication) => {
+          await supabase.from('humans').update({age: 42}).eq('id', '1')
+          await lastValueFrom(replication.remoteEvents$.pipe(take(1)))  // Wait for remote event
+        })
+  
+        expect(await rxdbContents()).toEqual([
+          {id: '1', name: 'Alice', age: 42}
+        ])
+      });
 
-      // TODO: DELETE
+      it("removes rows marked as deleted", async () => {
+        await replication({pull: {realtimePostgresChanges: true}}, async (replication) => {
+          await supabase.from('humans').update({_deleted: true}).eq('id', '1')
+          await lastValueFrom(replication.remoteEvents$.pipe(take(1)))  // Wait for remote event
+        })
+  
+        expect(await rxdbContents()).toEqual([])
+      });
+
+      it("ignores actually deleted rows", async () => {
+        await replication({pull: {realtimePostgresChanges: true}}, async (replication) => {
+          await supabase.from('humans').delete().eq('id', '1')
+          await new Promise(resolve => setTimeout(() => resolve(true), 1000))  // Wait for some time
+        })
+  
+        expect(await rxdbContents()).toEqual([
+          {id: '1', name: 'Alice', age: null}
+        ])
+      });
     })
   });
 
