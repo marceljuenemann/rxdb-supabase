@@ -3,7 +3,7 @@ import { RxDBDevModePlugin } from "rxdb/plugins/dev-mode";
 import { RxReplicationState } from "rxdb/plugins/replication";
 import { getRxStorageMemory } from "rxdb/plugins/storage-memory";
 import { afterEach, beforeAll, beforeEach, describe, expect, it } from "vitest";
-import { replicateSupabase, SupabaseReplicationCheckpoint, SupabaseReplicationOptions } from "../index.js";
+import { replicateSupabase, SupabaseReplicationCheckpoint, SupabaseReplicationOptions } from "../supabase-replication";
 import { Human, HumanRow, HUMAN_SCHEMA } from "./test-types.js";
 import { SupabaseBackendMock } from "./supabase-backend-mock.js";
 

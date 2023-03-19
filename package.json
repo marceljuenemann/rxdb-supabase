@@ -2,8 +2,8 @@
   "name": "rxdb-supabase",
   "version": "0.0.0-development",
   "type": "module",
-  "exports": "./build/index.js",
-  "types": "./build/src/index.d.ts",
+  "exports": "./build/supabase-replication.js",
+  "types": "./build/src/supabase-replication.d.ts",
   "license": "MIT",
   "engines": {
     "node": "^18.15.0",
