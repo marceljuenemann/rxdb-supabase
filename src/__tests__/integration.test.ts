@@ -10,7 +10,7 @@ import { RxReplicationState } from "rxdb/plugins/replication";
 import { addRxPlugin } from 'rxdb';
 import { RxDBDevModePlugin } from 'rxdb/plugins/dev-mode';
 import { lastValueFrom, take } from "rxjs";
-import { createHumans, withReplication } from "./test-utils.js";
+import { withReplication } from "./test-utils.js";
 
 /**
  * Integration test running against an actual Supabase instance.
@@ -41,10 +41,7 @@ describe.skipIf(!process.env.TEST_SUPABASE_URL)("replicateSupabase with actual S
     await replication({}, async() => {
       // TODO: remove explicit null, should be set by pull anyways
       await collection.insert({id: '1', name: 'Alice', age: null})
-
-
     })
-
     expect(await rxdbContents()).toEqual([{id: '1', name: 'Alice', age: null}])
     expect(await supabaseContents()).toEqual([{id: '1', name: 'Alice', age: null, '_deleted': false}])
   })
@@ -100,80 +97,80 @@ describe.skipIf(!process.env.TEST_SUPABASE_URL)("replicateSupabase with actual S
         })  
       })      
     })
+  })
 
-    describe("on client-side update", () => {
-      describe("without conflict", () => {
+  describe("on client-side update", () => {
+    describe("without conflict", () => {
+      it("updates supabase", async () => {
+        await replication({}, async() => {
+          let doc = await collection.findOne('1').exec()
+          await doc!.patch({age: 42})
+        })  
+        expect(await supabaseContents()).toEqual([
+          {id: '1', name: 'Alice', age: 42, '_deleted': false}
+        ])
+      })
+
+      describe("with postgREST special characters", () => {
         it("updates supabase", async () => {
-          await replication({}, async() => {
-            let doc = await collection.findOne('1').exec()
-            await doc!.patch({age: 42})
-          })  
+          // Prepare database with rows that contain special characters.
+          await collection.insert({id: 'special-,.()-id', name: 'Robert "Bob" Doe', age: null})
+          await replication()
           expect(await supabaseContents()).toEqual([
-            {id: '1', name: 'Alice', age: 42, '_deleted': false}
+            {id: '1', name: 'Alice', age: null, _deleted: false},
+            {id: 'special-,.()-id', name: 'Robert "Bob" Doe', age: null, _deleted: false}
+          ])
+          let doc = await collection.findOne('special-,.()-id').exec()
+
+          // The UPDATE query will now contain the special characters in the URL params.
+          await doc!.patch({age: 42})
+          await replication()
+
+          expect(await rxdbContents()).toEqual([
+            {id: '1', name: 'Alice', age: null},
+            {id: 'special-,.()-id', name: 'Robert "Bob" Doe', age: 42}
+          ])
+          expect(await supabaseContents()).toEqual([
+            {id: '1', name: 'Alice', age: null, _deleted: false},
+            {id: 'special-,.()-id', name: 'Robert "Bob" Doe', age: 42, _deleted: false}
           ])
         })
+      })
+    })
 
-        describe("with postgREST special characters", () => {
-          it("updates supabase", async () => {
-            // Prepare database with rows that contain special characters.
-            await collection.insert({id: 'special-,.()-id', name: 'Robert "Bob" Doe', age: null})
-            await replication()
-            expect(await supabaseContents()).toEqual([
-              {id: '1', name: 'Alice', age: null, _deleted: false},
-              {id: 'special-,.()-id', name: 'Robert "Bob" Doe', age: null, _deleted: false}
-            ])
-            let doc = await collection.findOne('special-,.()-id').exec()
+    describe("with conflict", () => {
+      beforeEach(async () => {
+        // Set Alice's age to 42 locally, while changing her name on the server.
+        let doc = await collection.findOne('1').exec()
+        await doc!.patch({age: 42})
+        await supabase.from('humans').update({name: 'Alex'}).eq('id', '1')
+      })
 
-            // The UPDATE query will now contain the special characters in the URL params.
-            await doc!.patch({age: 42})
-            await replication()
-
-            expect(await rxdbContents()).toEqual([
-              {id: '1', name: 'Alice', age: null},
-              {id: 'special-,.()-id', name: 'Robert "Bob" Doe', age: 42}
-            ])
-            expect(await supabaseContents()).toEqual([
-              {id: '1', name: 'Alice', age: null, _deleted: false},
-              {id: 'special-,.()-id', name: 'Robert "Bob" Doe', age: 42, _deleted: false}
-            ])
-          })
+      describe("with default conflict handler", () => {
+        it("applies supabase changes", async () => {
+          await replication()
+          expect(await rxdbContents()).toEqual([
+            {id: '1', name: 'Alex', age: null}
+          ])
+          expect(await supabaseContents()).toEqual([
+            {id: '1', name: 'Alex', age: null, '_deleted': false}
+          ])
         })
       })
 
-      describe("with conflict", () => {
-        beforeEach(async () => {
-          // Set Alice's age to 42 locally, while changing her name on the server.
-          let doc = await collection.findOne('1').exec()
-          await doc!.patch({age: 42})
-          await supabase.from('humans').update({name: 'Alex'}).eq('id', '1')
+      describe("with custom conflict handler", () => {
+        it("invokes conflict handler", async () => {
+          collection.conflictHandler = resolveConflictWithName('Conflict resolved')
+          await replication()
+          expect(await rxdbContents()).toEqual([
+            {id: '1', name: 'Conflict resolved', age: 42}
+          ])
+          expect(await supabaseContents()).toEqual([
+            {id: '1', name: 'Conflict resolved', age: 42, '_deleted': false}
+          ])
         })
-
-        describe("with default conflict handler", () => {
-          it("applies supabase changes", async () => {
-            await replication()
-            expect(await rxdbContents()).toEqual([
-              {id: '1', name: 'Alex', age: null}
-            ])
-            expect(await supabaseContents()).toEqual([
-              {id: '1', name: 'Alex', age: null, '_deleted': false}
-            ])
-          })
-        })
-
-        describe("with custom conflict handler", () => {
-          it("invokes conflict handler", async () => {
-            collection.conflictHandler = resolveConflictWithName('Conflict resolved')
-            await replication()
-            expect(await rxdbContents()).toEqual([
-              {id: '1', name: 'Conflict resolved', age: 42}
-            ])
-            expect(await supabaseContents()).toEqual([
-              {id: '1', name: 'Conflict resolved', age: 42, '_deleted': false}
-            ])
-          })
-        })
-      })  
-    })
+      })
+    })  
   })
 
   describe("when supabase changed while offline", () => {
@@ -187,15 +184,14 @@ describe.skipIf(!process.env.TEST_SUPABASE_URL)("replicateSupabase with actual S
       ])
     })
 
-    it.only("pulls rows in multiple batches", async () => {
+    it("pulls rows in multiple batches", async () => {
       // In this test, we set the batchSize to 1, but insert multiple rows into supabase such that
       // they have the same _modified timestamp. The test will only pass if the pull query fetches
       // rows with the same timestamp as the last checkpoint (but higher primary key). 
-      const {error} = await supabase.from('humans').insert([
+      await supabase.from('humans').insert([
         {id: '2', name: 'Human 2'},
         {id: '3', name: 'Human 3'},
       ])
-      if (error) throw error
       await replication({pull: {batchSize: 1}})
 
       expect(await rxdbContents()).toHaveLength(3)

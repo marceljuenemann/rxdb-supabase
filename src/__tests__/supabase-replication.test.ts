@@ -46,7 +46,7 @@ describe.skipIf(process.env.TEST_SUPABASE_URL)("replicateSupabase", () => {
           modified: 'timestamp',
           primaryKeyValue: 'pkv'
         }
-        expectPull(checkpoint).thenReturn(createHumans(1))
+        expectPull({withFilter: {lastModified: 'timestamp', lastPrimaryKey: 'pkv'}}).thenReturn(createHumans(1))
         await replication({pull: {initialCheckpoint: checkpoint}})
 
         expect(await rxdbContents()).toEqual([
@@ -66,19 +66,23 @@ describe.skipIf(process.env.TEST_SUPABASE_URL)("replicateSupabase", () => {
 
     describe("with many rows", () => {
       it("pulls in batches", async () => {
-        const expectedCheckpoint = (id: number): SupabaseReplicationCheckpoint => {
+        const expectedQuery = (lastHuman: number) => {
+          const human = createHuman(lastHuman)
           return {
-            modified: createHuman(id)._modified,
-            primaryKeyValue: createHuman(id).id
+            withLimit: BATCH_SIZE,
+            withFilter: {
+              lastModified: human._modified,
+              lastPrimaryKey: human.id
+            }
           }
         } 
 
         // Expect three queries
         const BATCH_SIZE = 13
         const humans = createHumans(BATCH_SIZE * 2 + 3)
-        expectPull(undefined, BATCH_SIZE).thenReturn(humans.slice(0, BATCH_SIZE))
-        expectPull(expectedCheckpoint(BATCH_SIZE), BATCH_SIZE).thenReturn(humans.slice(BATCH_SIZE, BATCH_SIZE * 2))
-        expectPull(expectedCheckpoint(BATCH_SIZE * 2), BATCH_SIZE).thenReturn(humans.slice(BATCH_SIZE * 2))
+        expectPull({withLimit: BATCH_SIZE}).thenReturn(humans.slice(0, BATCH_SIZE))
+        expectPull(expectedQuery(BATCH_SIZE)).thenReturn(humans.slice(BATCH_SIZE, BATCH_SIZE * 2))
+        expectPull(expectedQuery(BATCH_SIZE * 2)).thenReturn(humans.slice(BATCH_SIZE * 2))
 
         await replication({pull: {batchSize: BATCH_SIZE}})
 
@@ -228,13 +232,18 @@ describe.skipIf(process.env.TEST_SUPABASE_URL)("replicateSupabase", () => {
     return status
   }
 
-  let expectPull = (checkpoint?: SupabaseReplicationCheckpoint, limit: number = 100, primaryKey: string = '', modifiedField: string = '_modified') => {
-    // TODO: should be allowing for equal timestamp and have inequality for primary key.
+  let expectPull = (options: {withLimit?: number, withFilter?: {lastModified: string, lastPrimaryKey: string, modifiedField?: string}} = {}) => {
     // TODO: test double quotes inside a search string
-    const filter = checkpoint ? `&${modifiedField}=gt.${checkpoint.modified}` : ''
-    return supabaseMock.expectQuery(`Pull query with checkpoint ${checkpoint?.modified}`, {
+    let expectedFilter = ''
+    if (options.withFilter) {
+      const modifiedField = options.withFilter.modifiedField || '_modified'
+      expectedFilter = `&or=%28${modifiedField}.gt.%22${options.withFilter.lastModified}%22%2C` +
+        `and%28${modifiedField}.eq.%22${options.withFilter.lastModified}%22%2C` +
+        `id.gt.%22${options.withFilter.lastPrimaryKey}%22%29%29`
+    }
+    return supabaseMock.expectQuery(`Pull query with filter ${expectedFilter}`, {
       table: 'humans', 
-      params: `select=*${filter}&order=_modified.asc%2Cid.asc&limit=${limit}`
+      params: `select=*${expectedFilter}&order=_modified.asc%2Cid.asc&limit=${options.withLimit || 100}`
     })
   }
 

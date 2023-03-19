@@ -1,9 +1,5 @@
 TODO:
 * Integration tests
-  * pull rows with exact same timestamp
-    * should be possible to test in integreation test by inserting multiple rows in one request
-    * This will need encoding for sure?
-  * Cleanup encoding stuff
   * Add essential tests
   * live pulling
 * Unit tests

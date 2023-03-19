@@ -81,7 +81,7 @@ export type SupabaseReplicationOptions<RxDocType> = {
  */
 export type SupabaseReplicationCheckpoint = {
   modified: string
-  primaryKeyValue: string
+  primaryKeyValue: string | number
 };
 
 // TODO: 
@@ -141,17 +141,20 @@ export class SupabaseReplication<RxDocType> extends RxReplicationState<RxDocType
    * Pulls all changes since the last checkpoint from supabase.
    */
   private async pullHandler(lastCheckpoint: SupabaseReplicationCheckpoint, batchSize: number): Promise<ReplicationPullHandlerResult<RxDocType, SupabaseReplicationCheckpoint>> {
-    console.log("Pulling changes since", lastCheckpoint?.modified)
-
     let query = this.options.supabaseClient.from(this.table).select()
-    if (lastCheckpoint && lastCheckpoint.modified) {  // TODO: check modified
-      // TODO: support rows with the exact same timestamp
-      query = query.gt(this.lastModifiedFieldName, this.postgRestEncode(lastCheckpoint.modified))
+    if (lastCheckpoint && lastCheckpoint.modified) {
+      // Construct the PostgREST query for the following condition:
+      // WHERE _modified > lastModified OR (_modified = lastModified AND primaryKey > lastPrimaryKey)
+      const lastModified = JSON.stringify(lastCheckpoint.modified)
+      const lastPrimaryKey = JSON.stringify(lastCheckpoint.primaryKeyValue)  // TODO: Add test for a integer primary key
+      const isNewer = `${this.lastModifiedFieldName}.gt.${lastModified}`
+      const isSameAge = `${this.lastModifiedFieldName}.eq.${lastModified}`
+      query = query.or(`${isNewer},and(${isSameAge},${this.primaryKey}.gt.${lastPrimaryKey})`)
     }
-
     query = query.order(this.lastModifiedFieldName)
                  .order(this.primaryKey)
                  .limit(batchSize)
+    console.debug("Pulling changes since", lastCheckpoint?.modified, "with query", (query as any)['url'].toString())
 
     const { data, error } = await query
     if (error) throw error
@@ -184,7 +187,6 @@ export class SupabaseReplication<RxDocType> extends RxReplicationState<RxDocType
    * Tries to insert a new row. Returns the current state of the row in case of a conflict. 
    */
   private async handleInsertion(doc: WithDeleted<RxDocType>): Promise<WithDeleted<RxDocType>[]> {
-try {
     const { error } = await this.options.supabaseClient.from(this.table).insert(doc)
     if (!error) {
       return []  // Success :)
@@ -194,10 +196,6 @@ try {
     } else {
       throw error  // TODO: add test
     }
-  } catch (e) {
-    console.error("INSERT error", e)
-    throw e
-  }
   }
 
   /**
@@ -219,7 +217,7 @@ try {
     Object.entries(row.assumedMasterState!).forEach(([field, value]) => {
       let type = typeof value
       if (type === 'string' || type === 'number') {
-        query = query.eq(field, this.postgRestEncode(value))
+        query = query.eq(field, value)
       } else if (type === 'boolean' || value === null) {
         query = query.is(field, value)
       } else {
@@ -250,7 +248,7 @@ try {
   private async fetchByPrimaryKey(primaryKeyValue: any): Promise<WithDeleted<RxDocType>>  {
     const { data, error } = await this.options.supabaseClient.from(this.table)
         .select()
-        .eq(this.primaryKey, /*this.postgRestEncode*/(primaryKeyValue))  // TODO: Test for problematic cases
+        .eq(this.primaryKey, primaryKeyValue)
         .limit(1)
     if (error) throw error
     if (data.length != 1) throw new Error('No row with given primary key')
@@ -268,11 +266,5 @@ try {
       modified: row[this.lastModifiedFieldName],
       primaryKeyValue: row[this.primaryKey]
     }
-  }
-
-  private postgRestEncode(value: any): string {
-    // TODO: add explanation
-    return value
-    //return JSON.stringify('' + value)
   }
 }
