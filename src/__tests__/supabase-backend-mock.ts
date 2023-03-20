@@ -43,10 +43,10 @@ export class SupabaseBackendMock {
     let expectedUrl = `${this.url}rest/v1/${expected.table}`
     if (expected.params) expectedUrl += `?${expected.params}`
     return this.expectFetch(name, (input: URL | RequestInfo, options?: RequestInit | undefined) => {
-      // Use message to prevent output being truncated
-      expect(input.toString(), `Expected ${input.toString()} to equal ${expectedUrl}`).toEqual(expectedUrl)
+      // Set custom message to prevent output being truncated
       expect(options?.method).toEqual(expected.method || 'GET')
-      expect(options?.body).toEqual(expected.body)
+      expect(input.toString(), `Expected ${input.toString()} to equal ${expectedUrl}`).toEqual(expectedUrl)
+      expect(options?.body, `Expected ${options?.body} to equal ${expected.body}`).toEqual(expected.body)
     })
   }
 

@@ -1,5 +1,4 @@
 TODO:
-* Missing Integration tests
 * Unit tests
   * Add essential tests
   * PostgREST escaping & tests
@@ -13,6 +12,7 @@ TODO:
 * Better documentation
 * format
 * lint
+* Move test dir
 * README
 * Release
   * Test webhook

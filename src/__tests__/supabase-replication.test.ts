@@ -171,37 +171,48 @@ describe.skipIf(process.env.TEST_SUPABASE_URL)("replicateSupabase", () => {
 
   })
 
-  // TODO: test for escaping of search params
-
   describe('with client-side update', () => {
     describe('without conflict', () => {
       it('performs UPDATE with equality checks', async () => {
-        await collection.insert({id: '1', name: 'Alice', age: null})
+        await collection.insert({id: '1', name: 'Robert "Bob" Simpson', age: null})
         expectPull().thenReturn([])
-        expectInsert('{"id":"1","name":"Alice","age":null,"_deleted":false}').thenReturn()
+        expectInsert('{"id":"1","name":"Robert \\\"Bob\\\" Simpson","age":null,"_deleted":false}').thenReturn()
 
         await replication({}, async (replication) => {
-          supabaseMock.expectQuery('UPDATE Alice', {
+          supabaseMock.expectQuery('UPDATE Bob', {
+            method: 'PATCH',
             table: 'humans',
-            body: '{"id":"1","name":"Alice 2","age":42,"_deleted":false}',
-            params: 'id=eq.1&name=eq.Alice&age=is.null&_deleted=is.false',
-            method: 'PATCH'
+            params: 'id=eq.1&name=eq.Robert+%22Bob%22+Simpson&age=is.null&_deleted=is.false',
+            body: '{"id":"1","name":"Bobby","age":42,"_deleted":false}',
           }).thenReturn({}, {'Content-Range': '0-1/1'})  // TODO: Not sure this is the correct header result
-          await collection.upsert({id: '1', name: 'Alice 2', age: 42})
+          await collection.upsert({id: '1', name: 'Bobby', age: 42})
         })
 
         expect(await rxdbContents()).toEqual([
-          {id: '1', name: 'Alice 2', age: 42}
+          {id: '1', name: 'Bobby', age: 42}
         ])
+      })
+    })
+
+    // TODO: Test for unsupported field types (i.e. jsonb)
+  })
+
+  describe('with realtime enabled', () => {
+    it('subscribes to postgres_changes broadcast', async () => {
+      expectPull().thenReturn([])
+
+      await replication({pull: {realtimePostgresChanges: true}}, async () => {
+        await new Promise(resolve => setTimeout(() => resolve(true), 1000))  // Wait for some time
+
       })
     })
   })
 
 
+
   /*
   TODO
   - with client-side update
-    - checks for equalty
     - throws on JSON types
     - invokes conflict handler
     - uses custom updateHandler
