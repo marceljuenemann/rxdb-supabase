@@ -1,6 +1,7 @@
-import { SupabaseClient } from "@supabase/supabase-js"
+import { RealtimeChannel, RealtimeClient, RealtimePostgresChangesFilter, RealtimePostgresChangesPayload, SupabaseClient } from "@supabase/supabase-js"
 import { expect, vi } from "vitest"
 import { Response, RequestInfo, RequestInit } from "node-fetch"
+import { anyFunction, anyOfClass, anyString, anything, instance, mock, verify, when } from "ts-mockito"
 
 type RequestCheck = (input: URL | RequestInfo, options?: RequestInit | undefined) => void
 
@@ -12,6 +13,7 @@ interface ExpectedFetch {
 
 /**
  * Runs a real SuperbaseClient against a mock backend by using a custom fetch implementation.
+ * Any calls to the RealtimeClient will be mocked as well.
  */
 // TODO: Use fetch-mock package
 export class SupabaseBackendMock {
@@ -20,11 +22,14 @@ export class SupabaseBackendMock {
   readonly client: SupabaseClient
 
   private expectedFetches: ExpectedFetch[] = []
+  private realtimeClientMock = mock(RealtimeClient)
 
   constructor(options: any = {}) {
     this.client = new SupabaseClient(this.url, this.key, {...options, global: {
       fetch: this.fetch.bind(this) 
     }})
+    let hackedClient = this.client as any
+    hackedClient['realtime'] = instance(this.realtimeClientMock)
   }
 
   expectFetch(name: string, requestCheck: RequestCheck) {
@@ -66,5 +71,26 @@ export class SupabaseBackendMock {
     this.expectedFetches = this.expectedFetches.slice(1)
     expected.requestCheck(input, options)
     return expected.response
+  }
+
+  expectRealtimeSubscription<T extends { [key: string]: any; }>(table: string, event: string = '*', schema: string = 'public', topic: string = 'any') {
+    const channelMock = mock(RealtimeChannel)
+    let capturedCallback: (payload: RealtimePostgresChangesPayload<T>) => void
+    when(this.realtimeClientMock.channel(topic, anything())).thenReturn(instance(channelMock))
+    when(channelMock.on(anyString(), anything(), anyFunction())).thenCall((type, filter: RealtimePostgresChangesFilter<any>, callback: (payload: RealtimePostgresChangesPayload<T>) => void) => {
+      expect(filter.event).toEqual(event)
+      expect(filter.table).toEqual(table)
+      expect(filter.schema).toEqual(schema)
+      capturedCallback = callback
+      return instance(channelMock)
+    })
+    when(channelMock.subscribe()).thenReturn(instance(channelMock))
+    return {
+      next: (event: Partial<RealtimePostgresChangesPayload<T>>) => {
+        expect(capturedCallback, 'Expected realtime subscription did not happen').toBeTruthy()
+        capturedCallback(event as RealtimePostgresChangesPayload<T>)
+      },
+      verifyUnsubscribed: verify(channelMock.unsubscribe())
+    }
   }
 }

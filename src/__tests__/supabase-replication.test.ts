@@ -197,15 +197,34 @@ describe.skipIf(process.env.TEST_SUPABASE_URL)("replicateSupabase", () => {
     // TODO: Test for unsupported field types (i.e. jsonb)
   })
 
-  describe('with realtime enabled', () => {
-    it('subscribes to postgres_changes broadcast', async () => {
-      expectPull().thenReturn([])
-
-      await replication({pull: {realtimePostgresChanges: true}}, async () => {
-        await new Promise(resolve => setTimeout(() => resolve(true), 1000))  // Wait for some time
-
+  describe.only('with realtime enabled', () => {
+    describe('without events received', () => {
+      it('subscribes to and unsubscribes from RealtimeChannel', async () => {
+        expectPull().thenReturn([])
+        const realtimeSubscription = supabaseMock.expectRealtimeSubscription('humans')
+        await replication({pull: {realtimePostgresChanges: true}}, async () => {
+          realtimeSubscription.verifyUnsubscribed.never()
+        })
+        realtimeSubscription.verifyUnsubscribed.once()
       })
     })
+
+    describe('with insert event received', () => {
+      it('inserts new row locally', async () => {
+        expectPull().thenReturn([])
+        const realtimeSubscription = supabaseMock.expectRealtimeSubscription<HumanRow>('humans')
+        await replication({pull: {realtimePostgresChanges: true}}, async () => {
+          realtimeSubscription.next({eventType: 'INSERT', new: {id: '2', name: 'Bob', age: null, _deleted: false, _modified: '2023-1'}})
+        })
+        expect(await rxdbContents()).toEqual([
+          {id: '2', name: 'Bob', age: null}
+        ])
+      })
+    })
+
+
+    // TODO: multiple inserts and updates, deletes etc.
+
   })
 
 
@@ -221,6 +240,7 @@ describe.skipIf(process.env.TEST_SUPABASE_URL)("replicateSupabase", () => {
     - updates field
     - updates custom field
   - with live pull
+
     - ...
 
   */
