@@ -37,6 +37,7 @@ export async function withReplication(replicationFactory: () => SupabaseReplicat
  */
 export function resolveConflictWithName<T>(name: string): RxConflictHandler<T> {
   return async (input: RxConflictHandlerInput<T>) => {
+    console.log("Conflict handler:", input)
     return {
       isEqual: false,
       documentData: {...input.newDocumentState, name}

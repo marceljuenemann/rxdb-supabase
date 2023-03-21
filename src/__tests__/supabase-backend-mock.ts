@@ -38,8 +38,12 @@ export class SupabaseBackendMock {
         const response = new Response(JSON.stringify(body), {status: 200, statusText: "OK", headers})
         this.expectedFetches.push({name, requestCheck, response: Promise.resolve(response)})
       },
+      thenReturnError: (errorCode: string, httpCode: number = 409, message: string = 'Test error message') => {
+        const response = new Response(JSON.stringify({code: errorCode, message}), {status: httpCode, statusText: "ERROR"})
+        this.expectedFetches.push({name, requestCheck, response: Promise.resolve(response)})
+      },
       thenFail: (error: any = {}) => {
-        this.expectedFetches.push({name, requestCheck, response: Promise.reject(error)})
+      this.expectedFetches.push({name, requestCheck, response: Promise.reject(error)})
       }
     }
   }
@@ -66,6 +70,7 @@ export class SupabaseBackendMock {
   }
 
   private fetch(input: URL | RequestInfo, options?: RequestInit | undefined): Promise<Response> {
+    console.log("fetch", input)
     expect(this.expectedFetches, `Did not expect any requests. Got ${options?.method} ${input}`).not.toHaveLength(0)
     const expected = this.expectedFetches[0]
     this.expectedFetches = this.expectedFetches.slice(1)

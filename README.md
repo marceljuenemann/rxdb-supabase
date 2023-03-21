@@ -11,7 +11,7 @@ TODO:
 * Cleanup console stuff
 * Better documentation
 * format
-* lint
+* lint,
 * Move test dir
 * README
 * Release

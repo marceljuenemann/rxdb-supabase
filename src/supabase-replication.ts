@@ -203,6 +203,7 @@ export class SupabaseReplication<RxDocType> extends RxReplicationState<RxDocType
    * state is fetched and passed to the conflict handler. 
    */
   private async handleUpdate(row: RxReplicationWriteToMasterRow<RxDocType>): Promise<WithDeleted<RxDocType>[]> {
+    console.log("handleUpdate", row)
     const updateHandler = this.options.push?.updateHandler || this.defaultUpdateHandler.bind(this)
     if (await updateHandler(row)) return []  // Success :)
     // Fetch current state and let conflict handler resolve it.
@@ -250,6 +251,7 @@ export class SupabaseReplication<RxDocType> extends RxReplicationState<RxDocType
         .select()
         .eq(this.primaryKey, primaryKeyValue)
         .limit(1)
+    console.log("fetch by pk", data, error )
     if (error) throw error
     if (data.length != 1) throw new Error('No row with given primary key')
     return this.rowToRxDoc(data[0])

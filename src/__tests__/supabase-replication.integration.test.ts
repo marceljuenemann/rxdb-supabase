@@ -81,21 +81,21 @@ describe.skipIf(!process.env.TEST_SUPABASE_URL)("replicateSupabase with actual S
         })  
       })
 
-      describe("with custom conflict handler", () => {
+      describe.only("with custom conflict handler", () => {
         it("invokes conflict handler", async () => {
-          collection.conflictHandler = resolveConflictWithName('Conflict resolved')
+          collection.conflictHandler = resolveConflictWithName('Bob resolved')
 
-          await supabase.from('humans').insert({id: '2', name: 'Bob'})
-          await collection.insert({id: '2', name: 'Bob 2', age: 2})
+          await supabase.from('humans').insert({id: '2', name: 'Bob remote'})
+          await collection.insert({id: '2', name: 'Bob local', age: 42})
           await replication()
   
           expect(await supabaseContents()).toEqual([
             {id: '1', name: 'Alice', age: null, '_deleted': false},
-            {id: '2', name: 'Conflict resolved', age: 2, '_deleted': false}
+            {id: '2', name: 'Bob resolved', age: 42, '_deleted': false}
           ])
           expect(await rxdbContents()).toEqual([
             {id: '1', name: 'Alice', age: null},
-            {id: '2', name: 'Conflict resolved', age: 2}
+            {id: '2', name: 'Bob resolved', age: 42}
           ])
         })  
       })      

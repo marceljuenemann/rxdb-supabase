@@ -47,7 +47,7 @@ describe.skipIf(process.env.TEST_SUPABASE_URL)("replicateSupabase", () => {
           primaryKeyValue: 'pkv'
         }
         expectPull({withFilter: {lastModified: 'timestamp', lastPrimaryKey: 'pkv'}}).thenReturn(createHumans(1))
-        await replication({pull: {initialCheckpoint: checkpoint}})
+        await replication({pull: {initialCheckpoint: checkpoint, realtimePostgresChanges: false}})
 
         expect(await rxdbContents()).toEqual([
           {id: '1', name: 'Human 1', age: 11}
@@ -84,7 +84,7 @@ describe.skipIf(process.env.TEST_SUPABASE_URL)("replicateSupabase", () => {
         expectPull(expectedQuery(BATCH_SIZE)).thenReturn(humans.slice(BATCH_SIZE, BATCH_SIZE * 2))
         expectPull(expectedQuery(BATCH_SIZE * 2)).thenReturn(humans.slice(BATCH_SIZE * 2))
 
-        await replication({pull: {batchSize: BATCH_SIZE}})
+        await replication({pull: {batchSize: BATCH_SIZE, realtimePostgresChanges: false}})
 
         expect(await rxdbContents()).toHaveLength(humans.length)
       })
@@ -159,16 +159,35 @@ describe.skipIf(process.env.TEST_SUPABASE_URL)("replicateSupabase", () => {
 
     describe('with postgres error', () => {
       it('automatically retries', async () => {
-        // TODO
+        await collection.insert({id: '1', name: 'Alice', age: null})
+        expectPull().thenReturn([])
+        expectInsert('{"id":"1","name":"Alice","age":null,"_deleted":false}').thenReturnError("53000", 503)
+        expectInsert('{"id":"1","name":"Alice","age":null,"_deleted":false}').thenReturn()
+
+        const errors = await replication({retryTime: 10}, async () => {}, true)
+        expect(errors).toHaveLength(1)
       })
     })
 
     describe('with duplicate key error', () => {
       it('fetches current state and invokes conflict handler ', async () => {
-        // TODO
+        collection.conflictHandler = resolveConflictWithName('Resolved Alice')
+        await collection.insert({id: '1', name: 'Local Alice', age: null})
+        expectPull().thenReturn([])
+        expectInsert('{"id":"1","name":"Local Alice","age":null,"_deleted":false}').thenReturnError("23505")
+        // Should fetch current state on duplicate key error...
+        expectSelectById('1').thenReturn([{id: '1', name: 'Remote Alice', age: 42, _deleted: false, _modified: 'mod'}])
+        // Should update remote with the result of the conflict handler and the real master state as assumed state.
+        supabaseMock.expectQuery('UPDATE Alice', {
+          method: 'PATCH',
+          table: 'humans',
+          params: 'id=eq.1&name=eq.Remote+Alice&age=eq.42&_deleted=is.false',
+          body: '{"id":"1","name":"Resolved Alice","age":null,"_deleted":false}',
+        }).thenReturn({}, {'Content-Range': '0-1/1'})
+
+        await replication()
       })
     })
-
   })
 
   describe('with client-side update', () => {
@@ -197,7 +216,19 @@ describe.skipIf(process.env.TEST_SUPABASE_URL)("replicateSupabase", () => {
     // TODO: Test for unsupported field types (i.e. jsonb)
   })
 
-  describe.only('with realtime enabled', () => {
+    /*
+  TODO
+  - with client-side update
+    - throws on JSON types
+    - invokes conflict handler
+    - uses custom updateHandler
+    - query error
+  - with client-side delete
+    - updates field
+    - updates custom field
+  */
+
+  describe('with realtime enabled', () => {
     describe('without events received', () => {
       it('subscribes to and unsubscribes from RealtimeChannel', async () => {
         expectPull().thenReturn([])
@@ -222,28 +253,37 @@ describe.skipIf(process.env.TEST_SUPABASE_URL)("replicateSupabase", () => {
       })
     })
 
+    describe('with multiple realtime events received', () => {
+      it('updates local state', async () => {
+        expectPull().thenReturn([])
+        const realtimeSubscription = supabaseMock.expectRealtimeSubscription<HumanRow>('humans')
+        await replication({pull: {realtimePostgresChanges: true}}, async () => {
+          realtimeSubscription.next({eventType: 'INSERT', new: {id: '2', name: 'Bob', age: null, _deleted: false, _modified: '2023-1'}})
+          realtimeSubscription.next({eventType: 'UPDATE', new: {id: '2', name: 'Bob', age: 42, _deleted: false, _modified: '2023-2'}})
+          realtimeSubscription.next({eventType: 'INSERT', new: {id: '3', name: 'Carl', age: null, _deleted: false, _modified: '2023-3'}})
+          realtimeSubscription.next({eventType: 'UPDATE', new: {id: '1', name: 'Alice', age: null, _deleted: true, _modified: '2023-4'}})
+        })
+        expect(await rxdbContents()).toEqual([
+          {id: '2', name: 'Bob', age: 42},
+          {id: '3', name: 'Carl', age: null}
+        ])
+      })
+    })
 
-    // TODO: multiple inserts and updates, deletes etc.
-
+    describe('with DELETE event received', () => {
+      it('ignores event', async () => {
+        expectPull().thenReturn([])
+        const realtimeSubscription = supabaseMock.expectRealtimeSubscription<HumanRow>('humans')
+        await replication({pull: {realtimePostgresChanges: true}}, async () => {
+          realtimeSubscription.next({eventType: 'INSERT', new: {id: '1', name: 'Alice', age: null, _deleted: false, _modified: '2023-1'}})
+          realtimeSubscription.next({eventType: 'DELETE', old: {id: '1', name: 'Alice', age: null, _deleted: false, _modified: '2023-1'}})
+        })
+        expect(await rxdbContents()).toEqual([
+          {id: '1', name: 'Alice', age: null}
+        ])
+      })
+    })
   })
-
-
-
-  /*
-  TODO
-  - with client-side update
-    - throws on JSON types
-    - invokes conflict handler
-    - uses custom updateHandler
-    - query error
-  - with client-side delete
-    - updates field
-    - updates custom field
-  - with live pull
-
-    - ...
-
-  */
 
   let replication = (options: Partial<SupabaseReplicationOptions<Human>> = {},
       callback: (state: RxReplicationState<Human, SupabaseReplicationCheckpoint>) => Promise<void> = async() => {},
@@ -275,6 +315,13 @@ describe.skipIf(process.env.TEST_SUPABASE_URL)("replicateSupabase", () => {
     return supabaseMock.expectQuery(`Pull query with filter ${expectedFilter}`, {
       table: 'humans', 
       params: `select=*${expectedFilter}&order=_modified.asc%2Cid.asc&limit=${options.withLimit || 100}`
+    })
+  }
+
+  let expectSelectById = (id: string) => {
+    return supabaseMock.expectQuery(`Select by id ${id}`, {
+      table: 'humans', 
+      params: `select=*&id=eq.${id}&limit=1`
     })
   }
 
