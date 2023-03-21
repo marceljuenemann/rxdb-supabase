@@ -1,4 +1,4 @@
-import { addRxPlugin, createRxDatabase, RxCollection, RxConflictHandler, RxConflictHandlerInput, RxDatabase, RxError, WithDeleted } from "rxdb";
+import { addRxPlugin, createRxDatabase, RxCollection, RxConflictHandler, RxConflictHandlerInput, RxDatabase, RxError, RxReplicationWriteToMasterRow, WithDeleted } from "rxdb";
 import { RxDBDevModePlugin } from "rxdb/plugins/dev-mode";
 import { RxReplicationState } from "rxdb/plugins/replication";
 import { getRxStorageMemory } from "rxdb/plugins/storage-memory";
@@ -51,7 +51,23 @@ describe.skipIf(process.env.TEST_SUPABASE_URL)("replicateSupabase", () => {
 
         expect(await rxdbContents()).toEqual([
           {id: '1', name: 'Human 1', age: 11}
-        ])  
+        ])
+      })
+
+      describe("with custom modified field", () => {
+        it("pulls only modified rows using the specified field", async () => {
+          let checkpoint: SupabaseReplicationCheckpoint = {
+            modified: 'timestamp',
+            primaryKeyValue: 'pkv'
+          }
+          expectPull({withFilter: {lastModified: 'timestamp', lastPrimaryKey: 'pkv', modifiedField: 'myfield'}})
+            .thenReturn([{id: '1', name: 'Alice', age: null, _deleted: false, myfield: 'timestamp'}])
+          await replication({pull: {initialCheckpoint: checkpoint, realtimePostgresChanges: false, lastModifiedFieldName: 'myfield'}})
+
+          expect(await rxdbContents()).toEqual([
+            {id: '1', name: 'Alice', age: null}
+          ])
+        }) 
       })
     })
 
@@ -91,24 +107,53 @@ describe.skipIf(process.env.TEST_SUPABASE_URL)("replicateSupabase", () => {
     })
 
     describe("with query failing", () => {
-      it.skip("retries automatically", async () => {
-        // TODO
+      it("retries automatically", async () => {
+        expectPull().thenFail()
+        expectPull().thenReturn(createHumans(1))
+
+        const errors = await replication({retryTime: 10}, async () => {}, true)
+        expect(errors).toHaveLength(1)
+        expect(await rxdbContents()).toEqual([
+          {id: '1', name: 'Human 1', age: 11}
+        ])
       })
     })
 
     describe("with deletion", () => {
-      it.skip("deletes row locally", async () => {
-        // TODO
+      it("deletes row locally", async () => {
+        // Fill database first
+        await collection.insert({id: '1', name: 'Alice', age: null})
+        expectPull().thenReturn([])
+        expectInsert('{"id":"1","name":"Alice","age":null,"_deleted":false}').thenReturn()
+        await replication()
+        expect(await rxdbContents()).toEqual([
+          {id: '1', name: 'Alice', age: null}
+        ])
+
+        // Now return deletion
+        expectPull().thenReturn([{id: '1', name: 'Alice', age: null, _deleted: true, _modified: 'time'}])
+        await replication()
+        expect(await rxdbContents()).toEqual([])
+      })
+
+      describe("with custom delete field name", () => {
+        it("uses specified field name", async () => {
+          // Fill database first (using default here)
+          await collection.insert({id: '1', name: 'Alice', age: null})
+          expectPull().thenReturn([])
+          expectInsert('{"id":"1","name":"Alice","age":null,"_deleted":false}').thenReturn()
+          await replication()
+          expect(await rxdbContents()).toEqual([
+            {id: '1', name: 'Alice', age: null}
+          ])
+
+          // Now return deletion (using custom field here)
+          expectPull().thenReturn([{id: '1', name: 'Alice', age: null, myfield: true, _modified: 'time'}])
+          await replication({deletedField: 'myfield'})
+          expect(await rxdbContents()).toEqual([])
+        })
       })
     })
-
-    describe("with deletion and custom _delete field name", () => {
-      it.skip("deletes row locally", async () => {
-        // TODO
-      })
-    })
-
-    // TODO: Test custom modified field
   })
 
   describe('with client-side insertion', () => {
@@ -213,20 +258,151 @@ describe.skipIf(process.env.TEST_SUPABASE_URL)("replicateSupabase", () => {
       })
     })
 
+    describe('with conflict', () => {
+      it('invokes conflict handler and updates again', async () => {
+        collection.conflictHandler = resolveConflictWithName('Resolved Alice')
+        let doc = await collection.insert({id: '1', name: 'Alice', age: null})
+        expectPull().thenReturn([])
+        expectInsert('{"id":"1","name":"Alice","age":null,"_deleted":false}').thenReturn()
+
+        await replication({}, async (replication) => {
+          supabaseMock.expectQuery('UPDATE Alice (conflicting)', {
+            method: 'PATCH',
+            table: 'humans',
+            params: 'id=eq.1&name=eq.Alice&age=is.null&_deleted=is.false',
+            body: '{"id":"1","name":"Alice local","age":42,"_deleted":false}',
+          }).thenReturn({}, {'Content-Range': '0-0/0'})  // Zero rows updated
+
+          expectSelectById('1').thenReturn([{id: '1', name: 'Alice remote', age: 54}])
+          supabaseMock.expectQuery('UPDATE Alice (after resolution)', {
+            method: 'PATCH',
+            table: 'humans',
+            params: 'id=eq.1&name=eq.Alice+remote&age=eq.54&_deleted=is.false',
+            body: '{"id":"1","name":"Resolved Alice","age":42,"_deleted":false}',
+          }).thenReturn({}, {'Content-Range': '0-1/1'})  // One row updated
+
+          await doc.patch({name: 'Alice local', age: 42})
+        })
+
+        expect(await rxdbContents()).toEqual([
+          {id: '1', name: 'Resolved Alice', age: 42}
+        ])
+      })
+    })
+
+    describe('with custom updateHandler', () => {
+      describe('returning true', () => {
+        it('does not trigger any queries', async () => {
+          let doc = await collection.insert({id: '1', name: 'Alice', age: null})
+          expectPull().thenReturn([])
+          expectInsert('{"id":"1","name":"Alice","age":null,"_deleted":false}').thenReturn()
+  
+          await replication({push: {updateHandler: () => Promise.resolve(true)}}, async (replication) => {
+            await doc.patch({name: 'Alice local', age: 42})
+          })
+  
+          expect(await rxdbContents()).toEqual([
+            {id: '1', name: 'Alice local', age: 42}
+          ])
+        })
+      })
+
+      describe('returning false', () => {
+        it('invokes conflict handler and updates again', async () => {
+          let callCount = 0
+          let customUpdateHandler = (row: RxReplicationWriteToMasterRow<Human>): Promise<boolean> => {
+            callCount++
+            // Only return true (i.e. successful update) if we already fetched the updated state
+            return Promise.resolve(row.assumedMasterState?.name === 'Alice remote')
+          }
+
+          let doc = await collection.insert({id: '1', name: 'Alice', age: null})
+          expectPull().thenReturn([])
+          expectInsert('{"id":"1","name":"Alice","age":null,"_deleted":false}').thenReturn()
+  
+          collection.conflictHandler = resolveConflictWithName('Resolved Alice')
+          await replication({push: {updateHandler: customUpdateHandler}}, async (replication) => {
+            expectSelectById('1').thenReturn([{id: '1', name: 'Alice remote', age: 54}])
+            await doc.patch({name: 'Alice local', age: 42})
+          })
+  
+          expect(callCount).toEqual(2)
+          expect(await rxdbContents()).toEqual([
+            {id: '1', name: 'Resolved Alice', age: 42}
+          ])
+        })
+      })
+    })
+
+    describe('with network error', () => {
+      it('automatically retries', async () => {
+        await collection.insert({id: '1', name: 'Alice', age: null})
+        expectPull().thenReturn([])
+        expectInsert('{"id":"1","name":"Alice","age":null,"_deleted":false}').thenReturn()
+
+        const errors = await replication({retryTime: 10}, async () => {
+          supabaseMock.expectQuery('UPDATE Alice (failing)', {
+            method: 'PATCH',
+            table: 'humans',
+            params: 'id=eq.1&name=eq.Alice&age=is.null&_deleted=is.false',
+            body: '{"id":"1","name":"Alice 2","age":42,"_deleted":false}',
+          }).thenFail()
+          supabaseMock.expectQuery('UPDATE Alice (retry)', {
+            method: 'PATCH',
+            table: 'humans',
+            params: 'id=eq.1&name=eq.Alice&age=is.null&_deleted=is.false',
+            body: '{"id":"1","name":"Alice 2","age":42,"_deleted":false}',
+          }).thenReturn({}, {'Content-Range': '0-1/1'})
+          await collection.upsert({id: '1', name: 'Alice 2', age: 42})
+        }, true)
+        expect(errors).toHaveLength(1)
+      })
+    })
+
     // TODO: Test for unsupported field types (i.e. jsonb)
   })
 
-    /*
-  TODO
-  - with client-side update
-    - throws on JSON types
-    - invokes conflict handler
-    - uses custom updateHandler
-    - query error
-  - with client-side delete
-    - updates field
-    - updates custom field
-  */
+  describe('with client-side delete', () => {
+    describe('with default deleted field', () => {
+      it('performs UPDATE with equality checks', async () => {
+        let doc = await collection.insert({id: '1', name: 'Alice', age: null})
+        expectPull().thenReturn([])
+        expectInsert('{"id":"1","name":"Alice","age":null,"_deleted":false}').thenReturn()
+
+        await replication({}, async (replication) => {
+          supabaseMock.expectQuery('UPDATE Alice', {
+            method: 'PATCH',
+            table: 'humans',
+            params: 'id=eq.1&name=eq.Alice&age=is.null&_deleted=is.false',
+            body: '{"id":"1","name":"Alice","age":null,"_deleted":true}',
+          }).thenReturn({}, {'Content-Range': '0-1/1'})
+          await doc.remove()
+        })
+
+        expect(await rxdbContents()).toEqual([])
+      })
+    })
+
+    describe('with default custom deleted field', () => {
+      it('performs UPDATE with equality checks and custom deleted field', async () => {
+        let doc = await collection.insert({id: '1', name: 'Alice', age: null})
+        expectPull().thenReturn([])
+        expectInsert('{"id":"1","name":"Alice","age":null,"mydelete":false}').thenReturn()
+
+        await replication({deletedField: 'mydelete'}, async (replication) => {
+          supabaseMock.expectQuery('UPDATE Alice', {
+            method: 'PATCH',
+            table: 'humans',
+            params: 'id=eq.1&name=eq.Alice&age=is.null&mydelete=is.false',
+            body: '{"id":"1","name":"Alice","age":null,"mydelete":true}',
+          }).thenReturn({}, {'Content-Range': '0-1/1'})
+          await doc.remove()
+        })
+
+        expect(await rxdbContents()).toEqual([])
+      })
+    })
+  })
 
   describe('with realtime enabled', () => {
     describe('without events received', () => {
@@ -305,16 +481,16 @@ describe.skipIf(process.env.TEST_SUPABASE_URL)("replicateSupabase", () => {
 
   let expectPull = (options: {withLimit?: number, withFilter?: {lastModified: string, lastPrimaryKey: string, modifiedField?: string}} = {}) => {
     // TODO: test double quotes inside a search string
+    const modifiedField = options?.withFilter?.modifiedField || '_modified'
     let expectedFilter = ''
     if (options.withFilter) {
-      const modifiedField = options.withFilter.modifiedField || '_modified'
       expectedFilter = `&or=%28${modifiedField}.gt.%22${options.withFilter.lastModified}%22%2C` +
         `and%28${modifiedField}.eq.%22${options.withFilter.lastModified}%22%2C` +
         `id.gt.%22${options.withFilter.lastPrimaryKey}%22%29%29`
     }
     return supabaseMock.expectQuery(`Pull query with filter ${expectedFilter}`, {
       table: 'humans', 
-      params: `select=*${expectedFilter}&order=_modified.asc%2Cid.asc&limit=${options.withLimit || 100}`
+      params: `select=*${expectedFilter}&order=${modifiedField}.asc%2Cid.asc&limit=${options.withLimit || 100}`
     })
   }
 
