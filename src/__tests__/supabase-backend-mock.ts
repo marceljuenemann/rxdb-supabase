@@ -70,7 +70,6 @@ export class SupabaseBackendMock {
   }
 
   private fetch(input: URL | RequestInfo, options?: RequestInit | undefined): Promise<Response> {
-    console.log("fetch", input)
     expect(this.expectedFetches, `Did not expect any requests. Got ${options?.method} ${input}`).not.toHaveLength(0)
     const expected = this.expectedFetches[0]
     this.expectedFetches = this.expectedFetches.slice(1)

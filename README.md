@@ -1,24 +1,17 @@
 TODO:
-* Unit tests
-  * Add essential tests
-  * PostgREST escaping & tests
-  * push deletes?
-    * Custom field as well
-  * Test custom update handler
-  * Test custom modified field
-  * Check other options to test
-* Check TODOs
 * Cleanup console stuff
-* Better documentation
+* Check TODOs
+  * Better documentation
 * format
 * lint,
-* Move test dir
+* Move test dir?
 * README
 * Release
   * Test webhook
   * NPM
   * Make public
   * test in webapp
+  * Advertise
 
 Post-release
 * Push only mode

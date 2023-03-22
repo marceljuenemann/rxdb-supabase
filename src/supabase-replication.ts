@@ -154,7 +154,7 @@ export class SupabaseReplication<RxDocType> extends RxReplicationState<RxDocType
     query = query.order(this.lastModifiedFieldName)
                  .order(this.primaryKey)
                  .limit(batchSize)
-    console.debug("Pulling changes since", lastCheckpoint?.modified, "with query", (query as any)['url'].toString())
+    //console.debug("Pulling changes since", lastCheckpoint?.modified, "with query", (query as any)['url'].toString())
 
     const { data, error } = await query
     if (error) throw error
@@ -177,9 +177,7 @@ export class SupabaseReplication<RxDocType> extends RxReplicationState<RxDocType
   private async pushHandler(rows: RxReplicationWriteToMasterRow<RxDocType>[]): Promise<WithDeleted<RxDocType>[]> {
     if (rows.length != 1) throw new Error('Invalid batch size')
     const row = rows[0]
-  
-    console.log("Pushing changes...", row.newDocumentState)
-
+    //console.debug("Pushing changes...", row.newDocumentState)
     return row.assumedMasterState ? this.handleUpdate(row) : this.handleInsertion(row.newDocumentState)
   }
 
@@ -203,7 +201,6 @@ export class SupabaseReplication<RxDocType> extends RxReplicationState<RxDocType
    * state is fetched and passed to the conflict handler. 
    */
   private async handleUpdate(row: RxReplicationWriteToMasterRow<RxDocType>): Promise<WithDeleted<RxDocType>[]> {
-    console.log("handleUpdate", row)
     const updateHandler = this.options.push?.updateHandler || this.defaultUpdateHandler.bind(this)
     if (await updateHandler(row)) return []  // Success :)
     // Fetch current state and let conflict handler resolve it.
@@ -225,9 +222,7 @@ export class SupabaseReplication<RxDocType> extends RxReplicationState<RxDocType
         throw new Error(`replicateSupabase: Unsupported field of type ${type}`)
       }
     })
-    const stuff = await query
-    const { error, count } = stuff
-    console.debug("Update request:", (query as any)['url'].toString(), "count", count, stuff)
+    const { error, count } = await query
     if (error) throw error
     return count == 1
   }
@@ -237,7 +232,7 @@ export class SupabaseReplication<RxDocType> extends RxReplicationState<RxDocType
       .channel('any')
       .on('postgres_changes', { event: '*', schema: 'public', table: this.table }, payload => {
         if (payload.eventType === 'DELETE' || !payload.new) return  // Should have set _deleted field already
-        console.log('Change received!', payload)
+        //console.debug('Realtime event received:', payload)
         this.realtimeChanges.next({
           checkpoint: this.rowToCheckpoint(payload.new),
           documents: [this.rowToRxDoc(payload.new)]
@@ -251,7 +246,6 @@ export class SupabaseReplication<RxDocType> extends RxReplicationState<RxDocType
         .select()
         .eq(this.primaryKey, primaryKeyValue)
         .limit(1)
-    console.log("fetch by pk", data, error )
     if (error) throw error
     if (data.length != 1) throw new Error('No row with given primary key')
     return this.rowToRxDoc(data[0])

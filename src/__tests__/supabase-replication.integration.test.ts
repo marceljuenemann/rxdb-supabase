@@ -81,7 +81,7 @@ describe.skipIf(!process.env.TEST_SUPABASE_URL)("replicateSupabase with actual S
         })  
       })
 
-      describe.only("with custom conflict handler", () => {
+      describe("with custom conflict handler", () => {
         it("invokes conflict handler", async () => {
           collection.conflictHandler = resolveConflictWithName('Bob resolved')
 
