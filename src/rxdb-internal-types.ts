@@ -17,7 +17,7 @@ import { Observable } from "rxjs"
 
 export type MaybePromise<T> = Promise<T> | T
 
-export type ReplicationPullHandlerResult<RxDocType, CheckpointType> = {
+export interface ReplicationPullHandlerResult<RxDocType, CheckpointType> {
   checkpoint: CheckpointType
   documents: WithDeleted<RxDocType>[]
 }
@@ -28,7 +28,7 @@ export type ReplicationPullHandler<RxDocType, CheckpointType> = (
   lastPulledCheckpoint: CheckpointType,
   batchSize: number
 ) => Promise<ReplicationPullHandlerResult<RxDocType, CheckpointType>>
-export type ReplicationPullOptions<RxDocType, CheckpointType> = {
+export interface ReplicationPullOptions<RxDocType, CheckpointType> {
   /**
    * A handler that pulls the new remote changes
    * from the remote actor.
@@ -77,7 +77,7 @@ export type ReplicationPullOptions<RxDocType, CheckpointType> = {
 export type ReplicationPushHandler<RxDocType> = (
   docs: RxReplicationWriteToMasterRow<RxDocType>[]
 ) => Promise<WithDeleted<RxDocType>[]>
-export type ReplicationPushOptions<RxDocType> = {
+export interface ReplicationPushOptions<RxDocType> {
   /**
    * A handler that sends the new local changes
    * to the remote actor.
@@ -103,7 +103,7 @@ export type ReplicationPushOptions<RxDocType> = {
   initialCheckpoint?: any
 }
 
-export type ReplicationOptions<RxDocType, CheckpointType> = {
+export interface ReplicationOptions<RxDocType, CheckpointType> {
   /**
    * An id for the replication to identify it
    * and so that RxDB is able to resume the replication on app reload.

@@ -14,8 +14,8 @@ import {
   SupabaseReplicationCheckpoint,
   SupabaseReplicationOptions,
 } from "../supabase-replication.js"
-import { Human, HumanRow, HUMAN_SCHEMA } from "./test-types.js"
 import { SupabaseBackendMock } from "./supabase-backend-mock.js"
+import { Human, HumanRow, HUMAN_SCHEMA } from "./test-types.js"
 import { withReplication, resolveConflictWithName } from "./test-utils.js"
 
 describe.skipIf(process.env.TEST_SUPABASE_URL)("replicateSupabase", () => {
@@ -38,7 +38,7 @@ describe.skipIf(process.env.TEST_SUPABASE_URL)("replicateSupabase", () => {
       await db.addCollections({
         humans: { schema: HUMAN_SCHEMA },
       })
-    )["humans"]
+    ).humans
 
     // Supabase client with mocked HTTP.
     supabaseMock = new SupabaseBackendMock()
@@ -56,7 +56,7 @@ describe.skipIf(process.env.TEST_SUPABASE_URL)("replicateSupabase", () => {
 
     describe("with previous checkpoint", () => {
       it("pulls only modified rows", async () => {
-        let checkpoint: SupabaseReplicationCheckpoint = {
+        const checkpoint: SupabaseReplicationCheckpoint = {
           modified: "timestamp",
           primaryKeyValue: "pkv",
         }
@@ -75,7 +75,7 @@ describe.skipIf(process.env.TEST_SUPABASE_URL)("replicateSupabase", () => {
 
       describe("with custom modified field", () => {
         it("pulls only modified rows using the specified field", async () => {
-          let checkpoint: SupabaseReplicationCheckpoint = {
+          const checkpoint: SupabaseReplicationCheckpoint = {
             modified: "timestamp",
             primaryKeyValue: "pkv",
           }
@@ -330,7 +330,7 @@ describe.skipIf(process.env.TEST_SUPABASE_URL)("replicateSupabase", () => {
     describe("with conflict", () => {
       it("invokes conflict handler and updates again", async () => {
         collection.conflictHandler = resolveConflictWithName("Resolved Alice")
-        let doc = await collection.insert({
+        const doc = await collection.insert({
           id: "1",
           name: "Alice",
           age: null,
@@ -368,7 +368,7 @@ describe.skipIf(process.env.TEST_SUPABASE_URL)("replicateSupabase", () => {
     describe("with custom updateHandler", () => {
       describe("returning true", () => {
         it("does not trigger any queries", async () => {
-          let doc = await collection.insert({
+          const doc = await collection.insert({
             id: "1",
             name: "Alice",
             age: null,
@@ -390,7 +390,7 @@ describe.skipIf(process.env.TEST_SUPABASE_URL)("replicateSupabase", () => {
       describe("returning false", () => {
         it("invokes conflict handler and updates again", async () => {
           let callCount = 0
-          let customUpdateHandler = (
+          const customUpdateHandler = (
             row: RxReplicationWriteToMasterRow<Human>
           ): Promise<boolean> => {
             callCount++
@@ -398,7 +398,7 @@ describe.skipIf(process.env.TEST_SUPABASE_URL)("replicateSupabase", () => {
             return Promise.resolve(row.assumedMasterState?.name === "Alice remote")
           }
 
-          let doc = await collection.insert({
+          const doc = await collection.insert({
             id: "1",
             name: "Alice",
             age: null,
@@ -460,7 +460,7 @@ describe.skipIf(process.env.TEST_SUPABASE_URL)("replicateSupabase", () => {
   describe("with client-side delete", () => {
     describe("with default deleted field", () => {
       it("performs UPDATE with equality checks", async () => {
-        let doc = await collection.insert({
+        const doc = await collection.insert({
           id: "1",
           name: "Alice",
           age: null,
@@ -486,7 +486,7 @@ describe.skipIf(process.env.TEST_SUPABASE_URL)("replicateSupabase", () => {
 
     describe("with default custom deleted field", () => {
       it("performs UPDATE with equality checks and custom deleted field", async () => {
-        let doc = await collection.insert({
+        const doc = await collection.insert({
           id: "1",
           name: "Alice",
           age: null,
@@ -627,20 +627,20 @@ describe.skipIf(process.env.TEST_SUPABASE_URL)("replicateSupabase", () => {
     })
   })
 
-  let replication = (
+  const replication = (
     options: Partial<SupabaseReplicationOptions<Human>> = {},
     callback: (
       state: RxReplicationState<Human, SupabaseReplicationCheckpoint>
     ) => Promise<void> = async () => {},
-    expectErrors: boolean = false
+    expectErrors = false
   ): Promise<Error[]> => {
     return withReplication(() => startReplication(options), callback, expectErrors)
   }
 
-  let startReplication = (
+  const startReplication = (
     options: Partial<SupabaseReplicationOptions<Human>> = {}
   ): SupabaseReplication<Human> => {
-    let status = new SupabaseReplication({
+    const status = new SupabaseReplication({
       replicationIdentifier: "test",
       supabaseClient: supabaseMock.client,
       collection,
@@ -651,7 +651,7 @@ describe.skipIf(process.env.TEST_SUPABASE_URL)("replicateSupabase", () => {
     return status
   }
 
-  let expectPull = (
+  const expectPull = (
     options: {
       withLimit?: number
       withFilter?: {
@@ -662,7 +662,7 @@ describe.skipIf(process.env.TEST_SUPABASE_URL)("replicateSupabase", () => {
     } = {}
   ) => {
     // TODO: test double quotes inside a search string
-    const modifiedField = options?.withFilter?.modifiedField || "_modified"
+    const modifiedField = options.withFilter?.modifiedField || "_modified"
     let expectedFilter = ""
     if (options.withFilter) {
       expectedFilter =
@@ -678,27 +678,27 @@ describe.skipIf(process.env.TEST_SUPABASE_URL)("replicateSupabase", () => {
     })
   }
 
-  let expectSelectById = (id: string) => {
+  const expectSelectById = (id: string) => {
     return supabaseMock.expectQuery(`Select by id ${id}`, {
       table: "humans",
       params: `select=*&id=eq.${id}&limit=1`,
     })
   }
 
-  let expectInsert = (body: string) => {
+  const expectInsert = (body: string) => {
     return supabaseMock.expectInsert("humans", body)
   }
 
-  let rxdbContents = async (): Promise<Human[]> => {
+  const rxdbContents = async (): Promise<Human[]> => {
     const results = await collection.find().exec()
     return results.map((doc) => doc.toJSON())
   }
 
-  let createHumans = (count: number): HumanRow[] => {
+  const createHumans = (count: number): HumanRow[] => {
     return Array.from(Array(count).keys()).map((id) => createHuman(id + 1))
   }
 
-  let createHuman = (id: number): HumanRow => {
+  const createHuman = (id: number): HumanRow => {
     return {
       id: id.toString(),
       name: `Human ${id}`,

@@ -15,7 +15,7 @@ export async function withReplication(
   callback: (
     state: RxReplicationState<Human, SupabaseReplicationCheckpoint>
   ) => Promise<void> = async () => {},
-  expectErrors: boolean = false
+  expectErrors = false
 ): Promise<Error[]> {
   return new Promise(async (resolve, reject) => {
     const errors: Error[] = []

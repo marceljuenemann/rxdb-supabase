@@ -1,6 +1,5 @@
 import process from "process"
 import { SupabaseClient, createClient } from "@supabase/supabase-js"
-import { afterEach, beforeAll, beforeEach, describe, expect, it } from "vitest"
 
 import {
   createRxDatabase,
@@ -9,18 +8,18 @@ import {
   RxConflictHandlerInput,
   RxDatabase,
   WithDeleted,
-} from "rxdb"
+ addRxPlugin } from "rxdb"
+import { RxDBDevModePlugin } from "rxdb/plugins/dev-mode"
+import { RxReplicationState } from "rxdb/plugins/replication"
 import { getRxStorageMemory } from "rxdb/plugins/storage-memory"
-import { Human, HUMAN_SCHEMA } from "./test-types.js"
+import { lastValueFrom, take } from "rxjs"
+import { afterEach, beforeAll, beforeEach, describe, expect, it } from "vitest"
 import {
   SupabaseReplication,
   SupabaseReplicationCheckpoint,
   SupabaseReplicationOptions,
 } from "../supabase-replication.js"
-import { RxReplicationState } from "rxdb/plugins/replication"
-import { addRxPlugin } from "rxdb"
-import { RxDBDevModePlugin } from "rxdb/plugins/dev-mode"
-import { lastValueFrom, take } from "rxjs"
+import { Human, HUMAN_SCHEMA } from "./test-types.js"
 import { withReplication } from "./test-utils.js"
 
 /**
@@ -56,7 +55,7 @@ describe.skipIf(!process.env.TEST_SUPABASE_URL)(
         await db.addCollections({
           humans: { schema: HUMAN_SCHEMA },
         })
-      )["humans"]
+      ).humans
 
       // Start with Alice :)
       await replication({}, async () => {
@@ -126,7 +125,7 @@ describe.skipIf(!process.env.TEST_SUPABASE_URL)(
       describe("without conflict", () => {
         it("updates supabase", async () => {
           await replication({}, async () => {
-            let doc = await collection.findOne("1").exec()
+            const doc = await collection.findOne("1").exec()
             await doc!.patch({ age: 42 })
           })
           expect(await supabaseContents()).toEqual([
@@ -152,7 +151,7 @@ describe.skipIf(!process.env.TEST_SUPABASE_URL)(
                 _deleted: false,
               },
             ])
-            let doc = await collection.findOne("special-,.()-id").exec()
+            const doc = await collection.findOne("special-,.()-id").exec()
 
             // The UPDATE query will now contain the special characters in the URL params.
             await doc!.patch({ age: 42 })
@@ -178,7 +177,7 @@ describe.skipIf(!process.env.TEST_SUPABASE_URL)(
       describe("with conflict", () => {
         beforeEach(async () => {
           // Set Alice's age to 42 locally, while changing her name on the server.
-          let doc = await collection.findOne("1").exec()
+          const doc = await collection.findOne("1").exec()
           await doc!.patch({ age: 42 })
           await supabase.from("humans").update({ name: "Alex" }).eq("id", "1")
         })
@@ -306,20 +305,20 @@ describe.skipIf(!process.env.TEST_SUPABASE_URL)(
       })
     })
 
-    let replication = (
+    const replication = (
       options: Partial<SupabaseReplicationOptions<Human>> = {},
       callback: (
         state: RxReplicationState<Human, SupabaseReplicationCheckpoint>
       ) => Promise<void> = async () => {},
-      expectErrors: boolean = false
+      expectErrors = false
     ): Promise<Error[]> => {
       return withReplication(() => startReplication(options), callback, expectErrors)
     }
 
-    let startReplication = (
+    const startReplication = (
       options: Partial<SupabaseReplicationOptions<Human>> = {}
     ): SupabaseReplication<Human> => {
-      let status = new SupabaseReplication({
+      const status = new SupabaseReplication({
         replicationIdentifier: "test",
         supabaseClient: supabase,
         collection,
@@ -330,7 +329,7 @@ describe.skipIf(!process.env.TEST_SUPABASE_URL)(
       return status
     }
 
-    let resolveConflictWithName = <T>(name: string): RxConflictHandler<T> => {
+    const resolveConflictWithName = <T>(name: string): RxConflictHandler<T> => {
       return async (input: RxConflictHandlerInput<T>) => {
         return {
           isEqual: false,
@@ -339,14 +338,14 @@ describe.skipIf(!process.env.TEST_SUPABASE_URL)(
       }
     }
 
-    let supabaseContents = async (stripModified: boolean = true): Promise<WithDeleted<Human>[]> => {
+    const supabaseContents = async (stripModified = true): Promise<WithDeleted<Human>[]> => {
       const { data, error } = await supabase.from("humans").select().order("id")
       if (error) throw error
-      if (stripModified) data.forEach((human) => delete human["_modified"])
+      if (stripModified) data.forEach((human) => delete human._modified)
       return data as WithDeleted<Human>[]
     }
 
-    let rxdbContents = async (): Promise<Human[]> => {
+    const rxdbContents = async (): Promise<Human[]> => {
       const results = await collection.find().exec()
       return results.map((doc) => doc.toJSON())
     }

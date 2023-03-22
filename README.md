@@ -1,5 +1,4 @@
 TODO:
-* format
 * lint,
 * README
 * Release

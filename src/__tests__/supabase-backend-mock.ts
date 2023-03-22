@@ -5,9 +5,9 @@ import {
   RealtimePostgresChangesPayload,
   SupabaseClient,
 } from "@supabase/supabase-js"
-import { expect, vi } from "vitest"
 import { Response, RequestInfo, RequestInit } from "node-fetch"
 import { anyFunction, anyString, anything, instance, mock, verify, when } from "ts-mockito"
+import { expect, vi } from "vitest"
 
 type RequestCheck = (input: URL | RequestInfo, options?: RequestInit | undefined) => void
 
@@ -37,8 +37,8 @@ export class SupabaseBackendMock {
         fetch: this.fetch.bind(this),
       },
     })
-    let hackedClient = this.client as any
-    hackedClient["realtime"] = instance(this.realtimeClientMock)
+    const hackedClient = this.client as any
+    hackedClient.realtime = instance(this.realtimeClientMock)
   }
 
   expectFetch(name: string, requestCheck: RequestCheck) {
@@ -57,8 +57,8 @@ export class SupabaseBackendMock {
       },
       thenReturnError: (
         errorCode: string,
-        httpCode: number = 409,
-        message: string = "Test error message"
+        httpCode = 409,
+        message = "Test error message"
       ) => {
         const response = new Response(JSON.stringify({ code: errorCode, message }), {
           status: httpCode,
@@ -124,11 +124,11 @@ export class SupabaseBackendMock {
     return expected.response
   }
 
-  expectRealtimeSubscription<T extends { [key: string]: any }>(
+  expectRealtimeSubscription<T extends Record<string, any>>(
     table: string,
-    event: string = "*",
-    schema: string = "public",
-    topic: string = "any"
+    event = "*",
+    schema = "public",
+    topic = "any"
   ) {
     const channelMock = mock(RealtimeChannel)
     let capturedCallback: (payload: RealtimePostgresChangesPayload<T>) => void

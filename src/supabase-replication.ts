@@ -91,7 +91,7 @@ export type SupabaseReplicationOptions<RxDocType> = {
  * last modified time. In case two rows have the same timestamp, we use the primary
  * key to define a strict order.
  */
-export type SupabaseReplicationCheckpoint = {
+export interface SupabaseReplicationCheckpoint {
   modified: string
   primaryKeyValue: string | number
 }
@@ -116,9 +116,9 @@ export class SupabaseReplication<RxDocType> extends RxReplicationState<
   private realtimeChannel?: RealtimeChannel
 
   constructor(private options: SupabaseReplicationOptions<RxDocType>) {
-    const realtimeChanges: Subject<
+    const realtimeChanges = new Subject<
       RxReplicationPullStreamItem<RxDocType, SupabaseReplicationCheckpoint>
-    > = new Subject()
+    >()
     super(
       options.replicationIdentifier,
       options.collection,
@@ -253,7 +253,7 @@ export class SupabaseReplication<RxDocType> extends RxReplicationState<
       .from(this.table)
       .update(row.newDocumentState, { count: "exact" })
     Object.entries(row.assumedMasterState!).forEach(([field, value]) => {
-      let type = typeof value
+      const type = typeof value
       if (type === "string" || type === "number") {
         query = query.eq(field, value)
       } else if (type === "boolean" || value === null) {
