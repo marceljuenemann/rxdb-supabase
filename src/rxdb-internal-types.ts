@@ -1,13 +1,18 @@
 /**
  * RxDB types that are not part of rxdb's exports (as far as I can tell).
- * 
+ *
  * TODO: Ask them to export these types, so we don't have to copy them here.
- * 
+ *
  * Copyright for the following code belongs to pubkey (https://github.com/pubkey/rxdb).
  * Originally licensed under Apache License 2.0: https://github.com/pubkey/rxdb/blob/master/LICENSE.txt
  */
 
-import { RxCollection, RxReplicationPullStreamItem, RxReplicationWriteToMasterRow, WithDeleted } from "rxdb";
+import {
+  RxCollection,
+  RxReplicationPullStreamItem,
+  RxReplicationWriteToMasterRow,
+  WithDeleted,
+} from "rxdb";
 import { Observable } from "rxjs";
 
 export type MaybePromise<T> = Promise<T> | T;
@@ -29,7 +34,6 @@ export type ReplicationPullOptions<RxDocType, CheckpointType> = {
    * from the remote actor.
    */
   handler: ReplicationPullHandler<RxDocType, CheckpointType>;
-
 
   /**
    * An observable that streams all document changes
@@ -66,10 +70,10 @@ export type ReplicationPullOptions<RxDocType, CheckpointType> = {
 };
 
 /**
-* Gets the new write rows.
-* Returns the current master state of all conflicting writes,
-* so that they can be resolved on the client.
-*/
+ * Gets the new write rows.
+ * Returns the current master state of all conflicting writes,
+ * so that they can be resolved on the client.
+ */
 export type ReplicationPushHandler<RxDocType> = (
   docs: RxReplicationWriteToMasterRow<RxDocType>[]
 ) => Promise<WithDeleted<RxDocType>[]>;
@@ -80,7 +84,6 @@ export type ReplicationPushOptions<RxDocType> = {
    * On error, all documents are send again at later time.
    */
   handler: ReplicationPushHandler<RxDocType>;
-
 
   /**
    * A modifier that runs on all pushed documents before
@@ -100,7 +103,6 @@ export type ReplicationPushOptions<RxDocType> = {
   initialCheckpoint?: any;
 };
 
-
 export type ReplicationOptions<RxDocType, CheckpointType> = {
   /**
    * An id for the replication to identify it
@@ -116,7 +118,7 @@ export type ReplicationOptions<RxDocType, CheckpointType> = {
    * to flag a document as being deleted.
    * @default '_deleted'
    */
-  deletedField?: '_deleted' | string;
+  deletedField?: "_deleted" | string;
   pull?: ReplicationPullOptions<RxDocType, CheckpointType>;
   push?: ReplicationPushOptions<RxDocType>;
   /**

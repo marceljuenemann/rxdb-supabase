@@ -1,11 +1,10 @@
 TODO:
-* Check TODOs
-  * Better documentation
 * format
 * lint,
 * README
 * Release
   * Test webhook
+  * Change version
   * NPM
   * Make public
   * test in webapp
