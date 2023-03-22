@@ -1,10 +1,10 @@
-import { RxConflictHandler, RxConflictHandlerInput, RxError } from "rxdb";
-import { RxReplicationState } from "rxdb/plugins/replication";
+import { RxConflictHandler, RxConflictHandlerInput, RxError } from "rxdb"
+import { RxReplicationState } from "rxdb/plugins/replication"
 import {
   SupabaseReplication,
   SupabaseReplicationCheckpoint,
-} from "../supabase-replication";
-import { Human, HumanRow } from "./test-types.js";
+} from "../supabase-replication"
+import { Human, HumanRow } from "./test-types.js"
 
 /**
  * Starts a SupabaseReplication with the given factory, executes the given callback while the replication
@@ -21,22 +21,22 @@ export async function withReplication(
   expectErrors: boolean = false
 ): Promise<Error[]> {
   return new Promise(async (resolve, reject) => {
-    const errors: Error[] = [];
-    const replication = replicationFactory();
+    const errors: Error[] = []
+    const replication = replicationFactory()
     replication.error$.subscribe((error: any) => {
       if (expectErrors) {
-        errors.push(error);
+        errors.push(error)
       } else {
-        console.error("Replication emitted an unexpected error:", error);
-        reject(error.rxdb ? error.parameters.errors![0] : error);
+        console.error("Replication emitted an unexpected error:", error)
+        reject(error.rxdb ? error.parameters.errors![0] : error)
       }
-    });
-    await replication.awaitInitialReplication();
-    await callback(replication);
-    await replication.awaitInSync();
-    await replication.cancel();
-    resolve(errors);
-  });
+    })
+    await replication.awaitInitialReplication()
+    await callback(replication)
+    await replication.awaitInSync()
+    await replication.cancel()
+    resolve(errors)
+  })
 }
 
 /**
@@ -47,6 +47,6 @@ export function resolveConflictWithName<T>(name: string): RxConflictHandler<T> {
     return {
       isEqual: false,
       documentData: { ...input.newDocumentState, name },
-    };
-  };
+    }
+  }
 }

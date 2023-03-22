@@ -4,28 +4,28 @@ import {
   RxCollection,
   RxDatabase,
   RxReplicationWriteToMasterRow,
-} from "rxdb";
-import { RxDBDevModePlugin } from "rxdb/plugins/dev-mode";
-import { RxReplicationState } from "rxdb/plugins/replication";
-import { getRxStorageMemory } from "rxdb/plugins/storage-memory";
-import { afterEach, beforeAll, beforeEach, describe, expect, it } from "vitest";
+} from "rxdb"
+import { RxDBDevModePlugin } from "rxdb/plugins/dev-mode"
+import { RxReplicationState } from "rxdb/plugins/replication"
+import { getRxStorageMemory } from "rxdb/plugins/storage-memory"
+import { afterEach, beforeAll, beforeEach, describe, expect, it } from "vitest"
 import {
   SupabaseReplication,
   SupabaseReplicationCheckpoint,
   SupabaseReplicationOptions,
-} from "../supabase-replication.js";
-import { Human, HumanRow, HUMAN_SCHEMA } from "./test-types.js";
-import { SupabaseBackendMock } from "./supabase-backend-mock.js";
-import { withReplication, resolveConflictWithName } from "./test-utils.js";
+} from "../supabase-replication.js"
+import { Human, HumanRow, HUMAN_SCHEMA } from "./test-types.js"
+import { SupabaseBackendMock } from "./supabase-backend-mock.js"
+import { withReplication, resolveConflictWithName } from "./test-utils.js"
 
 describe.skipIf(process.env.TEST_SUPABASE_URL)("replicateSupabase", () => {
-  let supabaseMock: SupabaseBackendMock;
-  let db: RxDatabase;
-  let collection: RxCollection<Human>;
+  let supabaseMock: SupabaseBackendMock
+  let db: RxDatabase
+  let collection: RxCollection<Human>
 
   beforeAll(() => {
-    addRxPlugin(RxDBDevModePlugin);
-  });
+    addRxPlugin(RxDBDevModePlugin)
+  })
 
   beforeEach(async () => {
     // Create an in-memory RxDB database.
@@ -33,56 +33,56 @@ describe.skipIf(process.env.TEST_SUPABASE_URL)("replicateSupabase", () => {
       name: "test",
       storage: getRxStorageMemory(),
       ignoreDuplicate: true,
-    });
+    })
     collection = (
       await db.addCollections({
         humans: { schema: HUMAN_SCHEMA },
       })
-    )["humans"];
+    )["humans"]
 
     // Supabase client with mocked HTTP.
-    supabaseMock = new SupabaseBackendMock();
-  });
+    supabaseMock = new SupabaseBackendMock()
+  })
 
   describe("initial pull", () => {
     describe("without initial checkpoint", () => {
       it("pulls all rows from supabase", async () => {
-        expectPull().thenReturn(createHumans(1));
-        await replication();
+        expectPull().thenReturn(createHumans(1))
+        await replication()
 
         expect(await rxdbContents()).toEqual([
           { id: "1", name: "Human 1", age: 11 },
-        ]);
-      });
-    });
+        ])
+      })
+    })
 
     describe("with previous checkpoint", () => {
       it("pulls only modified rows", async () => {
         let checkpoint: SupabaseReplicationCheckpoint = {
           modified: "timestamp",
           primaryKeyValue: "pkv",
-        };
+        }
         expectPull({
           withFilter: { lastModified: "timestamp", lastPrimaryKey: "pkv" },
-        }).thenReturn(createHumans(1));
+        }).thenReturn(createHumans(1))
         await replication({
           pull: {
             initialCheckpoint: checkpoint,
             realtimePostgresChanges: false,
           },
-        });
+        })
 
         expect(await rxdbContents()).toEqual([
           { id: "1", name: "Human 1", age: 11 },
-        ]);
-      });
+        ])
+      })
 
       describe("with custom modified field", () => {
         it("pulls only modified rows using the specified field", async () => {
           let checkpoint: SupabaseReplicationCheckpoint = {
             modified: "timestamp",
             primaryKeyValue: "pkv",
-          };
+          }
           expectPull({
             withFilter: {
               lastModified: "timestamp",
@@ -97,94 +97,94 @@ describe.skipIf(process.env.TEST_SUPABASE_URL)("replicateSupabase", () => {
               _deleted: false,
               myfield: "timestamp",
             },
-          ]);
+          ])
           await replication({
             pull: {
               initialCheckpoint: checkpoint,
               realtimePostgresChanges: false,
               lastModifiedFieldName: "myfield",
             },
-          });
+          })
 
           expect(await rxdbContents()).toEqual([
             { id: "1", name: "Alice", age: null },
-          ]);
-        });
-      });
-    });
+          ])
+        })
+      })
+    })
 
     describe("with zero rows", () => {
       it("pulls no rows", async () => {
-        expectPull().thenReturn([]);
-        await replication();
+        expectPull().thenReturn([])
+        await replication()
 
-        expect(await rxdbContents()).toEqual([]);
-      });
-    });
+        expect(await rxdbContents()).toEqual([])
+      })
+    })
 
     describe("with many rows", () => {
       it("pulls in batches", async () => {
         const expectedQuery = (lastHuman: number) => {
-          const human = createHuman(lastHuman);
+          const human = createHuman(lastHuman)
           return {
             withLimit: BATCH_SIZE,
             withFilter: {
               lastModified: human._modified,
               lastPrimaryKey: human.id,
             },
-          };
-        };
+          }
+        }
 
         // Expect three queries
-        const BATCH_SIZE = 13;
-        const humans = createHumans(BATCH_SIZE * 2 + 3);
+        const BATCH_SIZE = 13
+        const humans = createHumans(BATCH_SIZE * 2 + 3)
         expectPull({ withLimit: BATCH_SIZE }).thenReturn(
           humans.slice(0, BATCH_SIZE)
-        );
+        )
         expectPull(expectedQuery(BATCH_SIZE)).thenReturn(
           humans.slice(BATCH_SIZE, BATCH_SIZE * 2)
-        );
+        )
         expectPull(expectedQuery(BATCH_SIZE * 2)).thenReturn(
           humans.slice(BATCH_SIZE * 2)
-        );
+        )
 
         await replication({
           pull: { batchSize: BATCH_SIZE, realtimePostgresChanges: false },
-        });
+        })
 
-        expect(await rxdbContents()).toHaveLength(humans.length);
-      });
-    });
+        expect(await rxdbContents()).toHaveLength(humans.length)
+      })
+    })
 
     describe("with query failing", () => {
       it("retries automatically", async () => {
-        expectPull().thenFail();
-        expectPull().thenReturn(createHumans(1));
+        expectPull().thenFail()
+        expectPull().thenReturn(createHumans(1))
 
         const errors = await replication(
           { retryTime: 10 },
           async () => {},
           true
-        );
-        expect(errors).toHaveLength(1);
+        )
+        expect(errors).toHaveLength(1)
         expect(await rxdbContents()).toEqual([
           { id: "1", name: "Human 1", age: 11 },
-        ]);
-      });
-    });
+        ])
+      })
+    })
 
     describe("with deletion", () => {
       it("deletes row locally", async () => {
         // Fill database first
-        await collection.insert({ id: "1", name: "Alice", age: null });
-        expectPull().thenReturn([]);
+        await collection.insert({ id: "1", name: "Alice", age: null })
+        expectPull().thenReturn([])
         expectInsert(
           '{"id":"1","name":"Alice","age":null,"_deleted":false}'
-        ).thenReturn();
-        await replication();
+        ).thenReturn()
+        await replication()
         expect(await rxdbContents()).toEqual([
           { id: "1", name: "Alice", age: null },
-        ]);
+        ])
 
         // Now return deletion
         expectPull().thenReturn([
@@ -195,23 +195,23 @@ describe.skipIf(process.env.TEST_SUPABASE_URL)("replicateSupabase", () => {
             _deleted: true,
             _modified: "time",
           },
-        ]);
-        await replication();
-        expect(await rxdbContents()).toEqual([]);
-      });
+        ])
+        await replication()
+        expect(await rxdbContents()).toEqual([])
+      })
 
       describe("with custom delete field name", () => {
         it("uses specified field name", async () => {
           // Fill database first (using default here)
-          await collection.insert({ id: "1", name: "Alice", age: null });
-          expectPull().thenReturn([]);
+          await collection.insert({ id: "1", name: "Alice", age: null })
+          expectPull().thenReturn([])
           expectInsert(
             '{"id":"1","name":"Alice","age":null,"_deleted":false}'
-          ).thenReturn();
-          await replication();
+          ).thenReturn()
+          await replication()
           expect(await rxdbContents()).toEqual([
             { id: "1", name: "Alice", age: null },
-          ]);
+          ])
 
           // Now return deletion (using custom field here)
           expectPull().thenReturn([
@@ -222,104 +222,104 @@ describe.skipIf(process.env.TEST_SUPABASE_URL)("replicateSupabase", () => {
               myfield: true,
               _modified: "time",
             },
-          ]);
-          await replication({ deletedField: "myfield" });
-          expect(await rxdbContents()).toEqual([]);
-        });
-      });
-    });
-  });
+          ])
+          await replication({ deletedField: "myfield" })
+          expect(await rxdbContents()).toEqual([])
+        })
+      })
+    })
+  })
 
   describe("with client-side insertion", () => {
     describe("with single insertion", () => {
       it("inserts row to supabase", async () => {
-        await collection.insert({ id: "1", name: "Alice", age: null });
-        expectPull().thenReturn([]);
+        await collection.insert({ id: "1", name: "Alice", age: null })
+        expectPull().thenReturn([])
         expectInsert(
           '{"id":"1","name":"Alice","age":null,"_deleted":false}'
-        ).thenReturn();
+        ).thenReturn()
 
-        await replication();
-      });
-    });
+        await replication()
+      })
+    })
 
     describe("with multiple insertions", () => {
       it("triggers multiple INSERT calls", async () => {
         // TODO: Batch insertion would be nice in this case.
-        await collection.insert({ id: "1", name: "Alice", age: null });
-        await collection.insert({ id: "2", name: "Bob", age: 42 });
-        expectPull().thenReturn([]);
+        await collection.insert({ id: "1", name: "Alice", age: null })
+        await collection.insert({ id: "2", name: "Bob", age: 42 })
+        expectPull().thenReturn([])
         expectInsert(
           '{"id":"1","name":"Alice","age":null,"_deleted":false}'
-        ).thenReturn();
+        ).thenReturn()
         expectInsert(
           '{"id":"2","name":"Bob","age":42,"_deleted":false}'
-        ).thenReturn();
+        ).thenReturn()
 
-        await replication();
-      });
-    });
+        await replication()
+      })
+    })
 
     describe("with custom _delete field", () => {
       it("uses specified field", async () => {
-        await collection.insert({ id: "1", name: "Alice", age: null });
-        expectPull().thenReturn([]);
+        await collection.insert({ id: "1", name: "Alice", age: null })
+        expectPull().thenReturn([])
         expectInsert(
           '{"id":"1","name":"Alice","age":null,"removed":false}'
-        ).thenReturn();
+        ).thenReturn()
 
-        await replication({ deletedField: "removed" });
-      });
-    });
+        await replication({ deletedField: "removed" })
+      })
+    })
 
     describe("with network error", () => {
       it("automatically retries", async () => {
-        await collection.insert({ id: "1", name: "Alice", age: null });
-        expectPull().thenReturn([]);
+        await collection.insert({ id: "1", name: "Alice", age: null })
+        expectPull().thenReturn([])
         expectInsert(
           '{"id":"1","name":"Alice","age":null,"_deleted":false}'
-        ).thenFail();
+        ).thenFail()
         expectInsert(
           '{"id":"1","name":"Alice","age":null,"_deleted":false}'
-        ).thenReturn();
+        ).thenReturn()
 
         const errors = await replication(
           { retryTime: 10 },
           async () => {},
           true
-        );
-        expect(errors).toHaveLength(1);
-      });
-    });
+        )
+        expect(errors).toHaveLength(1)
+      })
+    })
 
     describe("with postgres error", () => {
       it("automatically retries", async () => {
-        await collection.insert({ id: "1", name: "Alice", age: null });
-        expectPull().thenReturn([]);
+        await collection.insert({ id: "1", name: "Alice", age: null })
+        expectPull().thenReturn([])
         expectInsert(
           '{"id":"1","name":"Alice","age":null,"_deleted":false}'
-        ).thenReturnError("53000", 503);
+        ).thenReturnError("53000", 503)
         expectInsert(
           '{"id":"1","name":"Alice","age":null,"_deleted":false}'
-        ).thenReturn();
+        ).thenReturn()
 
         const errors = await replication(
           { retryTime: 10 },
           async () => {},
           true
-        );
-        expect(errors).toHaveLength(1);
-      });
-    });
+        )
+        expect(errors).toHaveLength(1)
+      })
+    })
 
     describe("with duplicate key error", () => {
       it("fetches current state and invokes conflict handler ", async () => {
-        collection.conflictHandler = resolveConflictWithName("Resolved Alice");
-        await collection.insert({ id: "1", name: "Local Alice", age: null });
-        expectPull().thenReturn([]);
+        collection.conflictHandler = resolveConflictWithName("Resolved Alice")
+        await collection.insert({ id: "1", name: "Local Alice", age: null })
+        expectPull().thenReturn([])
         expectInsert(
           '{"id":"1","name":"Local Alice","age":null,"_deleted":false}'
-        ).thenReturnError("23505");
+        ).thenReturnError("23505")
         // Should fetch current state on duplicate key error...
         expectSelectById("1").thenReturn([
           {
@@ -329,7 +329,7 @@ describe.skipIf(process.env.TEST_SUPABASE_URL)("replicateSupabase", () => {
             _deleted: false,
             _modified: "mod",
           },
-        ]);
+        ])
         // Should update remote with the result of the conflict handler and the real master state as assumed state.
         supabaseMock
           .expectQuery("UPDATE Alice", {
@@ -338,12 +338,12 @@ describe.skipIf(process.env.TEST_SUPABASE_URL)("replicateSupabase", () => {
             params: "id=eq.1&name=eq.Remote+Alice&age=eq.42&_deleted=is.false",
             body: '{"id":"1","name":"Resolved Alice","age":null,"_deleted":false}',
           })
-          .thenReturn({}, { "Content-Range": "0-1/1" });
+          .thenReturn({}, { "Content-Range": "0-1/1" })
 
-        await replication();
-      });
-    });
-  });
+        await replication()
+      })
+    })
+  })
 
   describe("with client-side update", () => {
     describe("without conflict", () => {
@@ -352,11 +352,11 @@ describe.skipIf(process.env.TEST_SUPABASE_URL)("replicateSupabase", () => {
           id: "1",
           name: 'Robert "Bob" Simpson',
           age: null,
-        });
-        expectPull().thenReturn([]);
+        })
+        expectPull().thenReturn([])
         expectInsert(
           '{"id":"1","name":"Robert \\"Bob\\" Simpson","age":null,"_deleted":false}'
-        ).thenReturn();
+        ).thenReturn()
 
         await replication({}, async (replication) => {
           supabaseMock
@@ -367,28 +367,28 @@ describe.skipIf(process.env.TEST_SUPABASE_URL)("replicateSupabase", () => {
                 "id=eq.1&name=eq.Robert+%22Bob%22+Simpson&age=is.null&_deleted=is.false",
               body: '{"id":"1","name":"Bobby","age":42,"_deleted":false}',
             })
-            .thenReturn({}, { "Content-Range": "0-1/1" }); // TODO: Not sure this is the correct header result
-          await collection.upsert({ id: "1", name: "Bobby", age: 42 });
-        });
+            .thenReturn({}, { "Content-Range": "0-1/1" }) // TODO: Not sure this is the correct header result
+          await collection.upsert({ id: "1", name: "Bobby", age: 42 })
+        })
 
         expect(await rxdbContents()).toEqual([
           { id: "1", name: "Bobby", age: 42 },
-        ]);
-      });
-    });
+        ])
+      })
+    })
 
     describe("with conflict", () => {
       it("invokes conflict handler and updates again", async () => {
-        collection.conflictHandler = resolveConflictWithName("Resolved Alice");
+        collection.conflictHandler = resolveConflictWithName("Resolved Alice")
         let doc = await collection.insert({
           id: "1",
           name: "Alice",
           age: null,
-        });
-        expectPull().thenReturn([]);
+        })
+        expectPull().thenReturn([])
         expectInsert(
           '{"id":"1","name":"Alice","age":null,"_deleted":false}'
-        ).thenReturn();
+        ).thenReturn()
 
         await replication({}, async (replication) => {
           supabaseMock
@@ -398,11 +398,11 @@ describe.skipIf(process.env.TEST_SUPABASE_URL)("replicateSupabase", () => {
               params: "id=eq.1&name=eq.Alice&age=is.null&_deleted=is.false",
               body: '{"id":"1","name":"Alice local","age":42,"_deleted":false}',
             })
-            .thenReturn({}, { "Content-Range": "0-0/0" }); // Zero rows updated
+            .thenReturn({}, { "Content-Range": "0-0/0" }) // Zero rows updated
 
           expectSelectById("1").thenReturn([
             { id: "1", name: "Alice remote", age: 54 },
-          ]);
+          ])
           supabaseMock
             .expectQuery("UPDATE Alice (after resolution)", {
               method: "PATCH",
@@ -411,16 +411,16 @@ describe.skipIf(process.env.TEST_SUPABASE_URL)("replicateSupabase", () => {
                 "id=eq.1&name=eq.Alice+remote&age=eq.54&_deleted=is.false",
               body: '{"id":"1","name":"Resolved Alice","age":42,"_deleted":false}',
             })
-            .thenReturn({}, { "Content-Range": "0-1/1" }); // One row updated
+            .thenReturn({}, { "Content-Range": "0-1/1" }) // One row updated
 
-          await doc.patch({ name: "Alice local", age: 42 });
-        });
+          await doc.patch({ name: "Alice local", age: 42 })
+        })
 
         expect(await rxdbContents()).toEqual([
           { id: "1", name: "Resolved Alice", age: 42 },
-        ]);
-      });
-    });
+        ])
+      })
+    })
 
     describe("with custom updateHandler", () => {
       describe("returning true", () => {
@@ -429,75 +429,74 @@ describe.skipIf(process.env.TEST_SUPABASE_URL)("replicateSupabase", () => {
             id: "1",
             name: "Alice",
             age: null,
-          });
-          expectPull().thenReturn([]);
+          })
+          expectPull().thenReturn([])
           expectInsert(
             '{"id":"1","name":"Alice","age":null,"_deleted":false}'
-          ).thenReturn();
+          ).thenReturn()
 
           await replication(
             { push: { updateHandler: () => Promise.resolve(true) } },
             async (replication) => {
-              await doc.patch({ name: "Alice local", age: 42 });
+              await doc.patch({ name: "Alice local", age: 42 })
             }
-          );
+          )
 
           expect(await rxdbContents()).toEqual([
             { id: "1", name: "Alice local", age: 42 },
-          ]);
-        });
-      });
+          ])
+        })
+      })
 
       describe("returning false", () => {
         it("invokes conflict handler and updates again", async () => {
-          let callCount = 0;
+          let callCount = 0
           let customUpdateHandler = (
             row: RxReplicationWriteToMasterRow<Human>
           ): Promise<boolean> => {
-            callCount++;
+            callCount++
             // Only return true (i.e. successful update) if we already fetched the updated state
             return Promise.resolve(
               row.assumedMasterState?.name === "Alice remote"
-            );
-          };
+            )
+          }
 
           let doc = await collection.insert({
             id: "1",
             name: "Alice",
             age: null,
-          });
-          expectPull().thenReturn([]);
+          })
+          expectPull().thenReturn([])
           expectInsert(
             '{"id":"1","name":"Alice","age":null,"_deleted":false}'
-          ).thenReturn();
+          ).thenReturn()
 
-          collection.conflictHandler =
-            resolveConflictWithName("Resolved Alice");
+          collection.conflictHandler = resolveConflictWithName("Resolved Alice")
           await replication(
             { push: { updateHandler: customUpdateHandler } },
             async (replication) => {
               expectSelectById("1").thenReturn([
                 { id: "1", name: "Alice remote", age: 54 },
-              ]);
-              await doc.patch({ name: "Alice local", age: 42 });
+              ])
+              await doc.patch({ name: "Alice local", age: 42 })
             }
-          );
+          )
 
-          expect(callCount).toEqual(2);
+          expect(callCount).toEqual(2)
           expect(await rxdbContents()).toEqual([
             { id: "1", name: "Resolved Alice", age: 42 },
-          ]);
-        });
-      });
-    });
+          ])
+        })
+      })
+    })
 
     describe("with network error", () => {
       it("automatically retries", async () => {
-        await collection.insert({ id: "1", name: "Alice", age: null });
-        expectPull().thenReturn([]);
+        await collection.insert({ id: "1", name: "Alice", age: null })
+        expectPull().thenReturn([])
         expectInsert(
           '{"id":"1","name":"Alice","age":null,"_deleted":false}'
-        ).thenReturn();
+        ).thenReturn()
 
         const errors = await replication(
           { retryTime: 10 },
@@ -509,7 +508,7 @@ describe.skipIf(process.env.TEST_SUPABASE_URL)("replicateSupabase", () => {
                 params: "id=eq.1&name=eq.Alice&age=is.null&_deleted=is.false",
                 body: '{"id":"1","name":"Alice 2","age":42,"_deleted":false}',
               })
-              .thenFail();
+              .thenFail()
             supabaseMock
               .expectQuery("UPDATE Alice (retry)", {
                 method: "PATCH",
@@ -517,17 +516,17 @@ describe.skipIf(process.env.TEST_SUPABASE_URL)("replicateSupabase", () => {
                 params: "id=eq.1&name=eq.Alice&age=is.null&_deleted=is.false",
                 body: '{"id":"1","name":"Alice 2","age":42,"_deleted":false}',
               })
-              .thenReturn({}, { "Content-Range": "0-1/1" });
-            await collection.upsert({ id: "1", name: "Alice 2", age: 42 });
+              .thenReturn({}, { "Content-Range": "0-1/1" })
+            await collection.upsert({ id: "1", name: "Alice 2", age: 42 })
           },
           true
-        );
-        expect(errors).toHaveLength(1);
-      });
-    });
+        )
+        expect(errors).toHaveLength(1)
+      })
+    })
 
     // TODO: Test for unsupported field types (i.e. jsonb)
-  });
+  })
 
   describe("with client-side delete", () => {
     describe("with default deleted field", () => {
@@ -536,11 +535,11 @@ describe.skipIf(process.env.TEST_SUPABASE_URL)("replicateSupabase", () => {
           id: "1",
           name: "Alice",
           age: null,
-        });
-        expectPull().thenReturn([]);
+        })
+        expectPull().thenReturn([])
         expectInsert(
           '{"id":"1","name":"Alice","age":null,"_deleted":false}'
-        ).thenReturn();
+        ).thenReturn()
 
         await replication({}, async (replication) => {
           supabaseMock
@@ -550,13 +549,13 @@ describe.skipIf(process.env.TEST_SUPABASE_URL)("replicateSupabase", () => {
               params: "id=eq.1&name=eq.Alice&age=is.null&_deleted=is.false",
               body: '{"id":"1","name":"Alice","age":null,"_deleted":true}',
             })
-            .thenReturn({}, { "Content-Range": "0-1/1" });
-          await doc.remove();
-        });
+            .thenReturn({}, { "Content-Range": "0-1/1" })
+          await doc.remove()
+        })
 
-        expect(await rxdbContents()).toEqual([]);
-      });
-    });
+        expect(await rxdbContents()).toEqual([])
+      })
+    })
 
     describe("with default custom deleted field", () => {
       it("performs UPDATE with equality checks and custom deleted field", async () => {
@@ -564,11 +563,11 @@ describe.skipIf(process.env.TEST_SUPABASE_URL)("replicateSupabase", () => {
           id: "1",
           name: "Alice",
           age: null,
-        });
-        expectPull().thenReturn([]);
+        })
+        expectPull().thenReturn([])
         expectInsert(
           '{"id":"1","name":"Alice","age":null,"mydelete":false}'
-        ).thenReturn();
+        ).thenReturn()
 
         await replication({ deletedField: "mydelete" }, async (replication) => {
           supabaseMock
@@ -578,36 +577,36 @@ describe.skipIf(process.env.TEST_SUPABASE_URL)("replicateSupabase", () => {
               params: "id=eq.1&name=eq.Alice&age=is.null&mydelete=is.false",
               body: '{"id":"1","name":"Alice","age":null,"mydelete":true}',
             })
-            .thenReturn({}, { "Content-Range": "0-1/1" });
-          await doc.remove();
-        });
+            .thenReturn({}, { "Content-Range": "0-1/1" })
+          await doc.remove()
+        })
 
-        expect(await rxdbContents()).toEqual([]);
-      });
-    });
-  });
+        expect(await rxdbContents()).toEqual([])
+      })
+    })
+  })
 
   describe("with realtime enabled", () => {
     describe("without events received", () => {
       it("subscribes to and unsubscribes from RealtimeChannel", async () => {
-        expectPull().thenReturn([]);
+        expectPull().thenReturn([])
         const realtimeSubscription =
-          supabaseMock.expectRealtimeSubscription("humans");
+          supabaseMock.expectRealtimeSubscription("humans")
         await replication(
           { pull: { realtimePostgresChanges: true } },
           async () => {
-            realtimeSubscription.verifyUnsubscribed.never();
+            realtimeSubscription.verifyUnsubscribed.never()
           }
-        );
-        realtimeSubscription.verifyUnsubscribed.once();
-      });
-    });
+        )
+        realtimeSubscription.verifyUnsubscribed.once()
+      })
+    })
 
     describe("with insert event received", () => {
       it("inserts new row locally", async () => {
-        expectPull().thenReturn([]);
+        expectPull().thenReturn([])
         const realtimeSubscription =
-          supabaseMock.expectRealtimeSubscription<HumanRow>("humans");
+          supabaseMock.expectRealtimeSubscription<HumanRow>("humans")
         await replication(
           { pull: { realtimePostgresChanges: true } },
           async () => {
@@ -620,20 +619,20 @@ describe.skipIf(process.env.TEST_SUPABASE_URL)("replicateSupabase", () => {
                 _deleted: false,
                 _modified: "2023-1",
               },
-            });
+            })
           }
-        );
+        )
         expect(await rxdbContents()).toEqual([
           { id: "2", name: "Bob", age: null },
-        ]);
-      });
-    });
+        ])
+      })
+    })
 
     describe("with multiple realtime events received", () => {
       it("updates local state", async () => {
-        expectPull().thenReturn([]);
+        expectPull().thenReturn([])
         const realtimeSubscription =
-          supabaseMock.expectRealtimeSubscription<HumanRow>("humans");
+          supabaseMock.expectRealtimeSubscription<HumanRow>("humans")
         await replication(
           { pull: { realtimePostgresChanges: true } },
           async () => {
@@ -646,7 +645,7 @@ describe.skipIf(process.env.TEST_SUPABASE_URL)("replicateSupabase", () => {
                 _deleted: false,
                 _modified: "2023-1",
               },
-            });
+            })
             realtimeSubscription.next({
               eventType: "UPDATE",
               new: {
@@ -656,7 +655,7 @@ describe.skipIf(process.env.TEST_SUPABASE_URL)("replicateSupabase", () => {
                 _deleted: false,
                 _modified: "2023-2",
               },
-            });
+            })
             realtimeSubscription.next({
               eventType: "INSERT",
               new: {
@@ -666,7 +665,7 @@ describe.skipIf(process.env.TEST_SUPABASE_URL)("replicateSupabase", () => {
                 _deleted: false,
                 _modified: "2023-3",
               },
-            });
+            })
             realtimeSubscription.next({
               eventType: "UPDATE",
               new: {
@@ -676,21 +675,21 @@ describe.skipIf(process.env.TEST_SUPABASE_URL)("replicateSupabase", () => {
                 _deleted: true,
                 _modified: "2023-4",
               },
-            });
+            })
           }
-        );
+        )
         expect(await rxdbContents()).toEqual([
           { id: "2", name: "Bob", age: 42 },
           { id: "3", name: "Carl", age: null },
-        ]);
-      });
-    });
+        ])
+      })
+    })
 
     describe("with DELETE event received", () => {
       it("ignores event", async () => {
-        expectPull().thenReturn([]);
+        expectPull().thenReturn([])
         const realtimeSubscription =
-          supabaseMock.expectRealtimeSubscription<HumanRow>("humans");
+          supabaseMock.expectRealtimeSubscription<HumanRow>("humans")
         await replication(
           { pull: { realtimePostgresChanges: true } },
           async () => {
@@ -703,7 +702,7 @@ describe.skipIf(process.env.TEST_SUPABASE_URL)("replicateSupabase", () => {
                 _deleted: false,
                 _modified: "2023-1",
               },
-            });
+            })
             realtimeSubscription.next({
               eventType: "DELETE",
               old: {
@@ -713,15 +712,15 @@ describe.skipIf(process.env.TEST_SUPABASE_URL)("replicateSupabase", () => {
                 _deleted: false,
                 _modified: "2023-1",
               },
-            });
+            })
           }
-        );
+        )
         expect(await rxdbContents()).toEqual([
           { id: "1", name: "Alice", age: null },
-        ]);
-      });
-    });
-  });
+        ])
+      })
+    })
+  })
 
   let replication = (
     options: Partial<SupabaseReplicationOptions<Human>> = {},
@@ -734,8 +733,8 @@ describe.skipIf(process.env.TEST_SUPABASE_URL)("replicateSupabase", () => {
       () => startReplication(options),
       callback,
       expectErrors
-    );
-  };
+    )
+  }
 
   let startReplication = (
     options: Partial<SupabaseReplicationOptions<Human>> = {}
@@ -747,28 +746,28 @@ describe.skipIf(process.env.TEST_SUPABASE_URL)("replicateSupabase", () => {
       pull: { realtimePostgresChanges: false },
       push: {},
       ...options,
-    });
-    return status;
-  };
+    })
+    return status
+  }
 
   let expectPull = (
     options: {
-      withLimit?: number;
+      withLimit?: number
       withFilter?: {
-        lastModified: string;
-        lastPrimaryKey: string;
-        modifiedField?: string;
-      };
+        lastModified: string
+        lastPrimaryKey: string
+        modifiedField?: string
+      }
     } = {}
   ) => {
     // TODO: test double quotes inside a search string
-    const modifiedField = options?.withFilter?.modifiedField || "_modified";
-    let expectedFilter = "";
+    const modifiedField = options?.withFilter?.modifiedField || "_modified"
+    let expectedFilter = ""
     if (options.withFilter) {
       expectedFilter =
         `&or=%28${modifiedField}.gt.%22${options.withFilter.lastModified}%22%2C` +
         `and%28${modifiedField}.eq.%22${options.withFilter.lastModified}%22%2C` +
-        `id.gt.%22${options.withFilter.lastPrimaryKey}%22%29%29`;
+        `id.gt.%22${options.withFilter.lastPrimaryKey}%22%29%29`
     }
     return supabaseMock.expectQuery(
       `Pull query with filter ${expectedFilter}`,
@@ -778,28 +777,28 @@ describe.skipIf(process.env.TEST_SUPABASE_URL)("replicateSupabase", () => {
           options.withLimit || 100
         }`,
       }
-    );
-  };
+    )
+  }
 
   let expectSelectById = (id: string) => {
     return supabaseMock.expectQuery(`Select by id ${id}`, {
       table: "humans",
       params: `select=*&id=eq.${id}&limit=1`,
-    });
-  };
+    })
+  }
 
   let expectInsert = (body: string) => {
-    return supabaseMock.expectInsert("humans", body);
-  };
+    return supabaseMock.expectInsert("humans", body)
+  }
 
   let rxdbContents = async (): Promise<Human[]> => {
-    const results = await collection.find().exec();
-    return results.map((doc) => doc.toJSON());
-  };
+    const results = await collection.find().exec()
+    return results.map((doc) => doc.toJSON())
+  }
 
   let createHumans = (count: number): HumanRow[] => {
-    return Array.from(Array(count).keys()).map((id) => createHuman(id + 1));
-  };
+    return Array.from(Array(count).keys()).map((id) => createHuman(id + 1))
+  }
 
   let createHuman = (id: number): HumanRow => {
     return {
@@ -808,11 +807,11 @@ describe.skipIf(process.env.TEST_SUPABASE_URL)("replicateSupabase", () => {
       age: id % 2 == 0 ? null : id * 11,
       _deleted: false,
       _modified: "2023-" + id,
-    };
-  };
+    }
+  }
 
   afterEach(async () => {
-    supabaseMock.verifyNoMoreQueriesExpected();
-    await db.remove();
-  });
-});
+    supabaseMock.verifyNoMoreQueriesExpected()
+    await db.remove()
+  })
+})

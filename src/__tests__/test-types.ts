@@ -1,14 +1,14 @@
-import { WithDeleted } from "rxdb";
+import { WithDeleted } from "rxdb"
 
 export interface Human {
-  id: string;
-  name: string;
-  age: number | null;
+  id: string
+  name: string
+  age: number | null
 }
 
 export type HumanRow = WithDeleted<Human> & {
-  _modified: string;
-};
+  _modified: string
+}
 
 export const HUMAN_SCHEMA = {
   title: "human schema",
@@ -33,4 +33,4 @@ export const HUMAN_SCHEMA = {
   },
   required: ["name", "id", "age"],
   indexes: ["age"],
-};
+}
