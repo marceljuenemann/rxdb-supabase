@@ -65,7 +65,6 @@ export type SupabaseReplicationOptions<RxDocType> = {
      * invoked. The default handler does not support JSON fields at the moment.
      */
     // TODO: Support JSON fields
-    // TODO: Unit tests
     updateHandler?: (row: RxReplicationWriteToMasterRow<RxDocType>) => Promise<boolean>
   },
 } & Omit<
@@ -84,7 +83,12 @@ export type SupabaseReplicationCheckpoint = {
   primaryKeyValue: string | number
 };
 
-// TODO: 
+/**
+ * Replicates the local RxDB database with the given Supabase client.
+ * 
+ * See SupabaseReplicationOptions for the various configuration options. For a general introduction
+ * to RxDB's replication protocol, see https://rxdb.info/replication.html
+ */
 export class SupabaseReplication<RxDocType> extends RxReplicationState<RxDocType, SupabaseReplicationCheckpoint>{
   private readonly table: string
   private readonly primaryKey: string
@@ -192,7 +196,7 @@ export class SupabaseReplication<RxDocType> extends RxReplicationState<RxDocType
       // The row was already inserted. Fetch current state and let conflict handler resolve it.
       return [await this.fetchByPrimaryKey((doc as any)[this.primaryKey])]
     } else {
-      throw error  // TODO: add test
+      throw error
     }
   }
 

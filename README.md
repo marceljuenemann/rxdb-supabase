@@ -1,10 +1,8 @@
 TODO:
-* Cleanup console stuff
 * Check TODOs
   * Better documentation
 * format
 * lint,
-* Move test dir?
 * README
 * Release
   * Test webhook
@@ -18,6 +16,7 @@ Post-release
 * Batch insertion
 
 Notes:
+* JSON fields not supported, need to write your own updateHandler
 * Replication ID and the problem around auth / user changes (maybe not really a problem)
 * _modified column (if pull is used)
 * _deleted column
@@ -26,6 +25,7 @@ Notes:
 * Only use null collections :)
 
 Future TODO:
+* Ask rxdb to expose types?
 * Sync only portion of the table (e.g. a where that will hold true for all rows)
   * Could be implemented with a callback passed in options
   * Better to focus on SupabaseOfflineCache, probably? Well, it's very easy to do though
