@@ -1,9 +1,6 @@
 import { RxConflictHandler, RxConflictHandlerInput, RxError } from "rxdb"
 import { RxReplicationState } from "rxdb/plugins/replication"
-import {
-  SupabaseReplication,
-  SupabaseReplicationCheckpoint,
-} from "../supabase-replication"
+import { SupabaseReplication, SupabaseReplicationCheckpoint } from "../supabase-replication"
 import { Human, HumanRow } from "./test-types.js"
 
 /**

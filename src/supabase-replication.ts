@@ -77,9 +77,7 @@ export type SupabaseReplicationOptions<RxDocType> = {
      * invoked. The default handler does not support JSON fields at the moment.
      */
     // TODO: Support JSON fields
-    updateHandler?: (
-      row: RxReplicationWriteToMasterRow<RxDocType>
-    ) => Promise<boolean>
+    updateHandler?: (row: RxReplicationWriteToMasterRow<RxDocType>) => Promise<boolean>
   }
 } & Omit<
   // We don't support waitForLeadership. You should just run in a SharedWorker anyways, no?
@@ -128,8 +126,7 @@ export class SupabaseReplication<RxDocType> extends RxReplicationState<
       options.pull && {
         ...options.pull,
         stream$: realtimeChanges,
-        handler: (lastCheckpoint, batchSize) =>
-          this.pullHandler(lastCheckpoint, batchSize),
+        handler: (lastCheckpoint, batchSize) => this.pullHandler(lastCheckpoint, batchSize),
       },
       options.push && {
         ...options.push,
@@ -142,10 +139,8 @@ export class SupabaseReplication<RxDocType> extends RxReplicationState<
     )
     this.realtimeChanges = realtimeChanges
     this.table = options.table || options.collection.name
-    this.primaryKey =
-      options.primaryKey || options.collection.schema.primaryPath
-    this.lastModifiedFieldName =
-      options.pull?.lastModifiedFieldName || DEFAULT_LAST_MODIFIED_FIELD
+    this.primaryKey = options.primaryKey || options.collection.schema.primaryPath
+    this.lastModifiedFieldName = options.pull?.lastModifiedFieldName || DEFAULT_LAST_MODIFIED_FIELD
 
     if (this.autoStart) {
       this.start()
@@ -177,9 +172,7 @@ export class SupabaseReplication<RxDocType> extends RxReplicationState<
   private async pullHandler(
     lastCheckpoint: SupabaseReplicationCheckpoint,
     batchSize: number
-  ): Promise<
-    ReplicationPullHandlerResult<RxDocType, SupabaseReplicationCheckpoint>
-  > {
+  ): Promise<ReplicationPullHandlerResult<RxDocType, SupabaseReplicationCheckpoint>> {
     let query = this.options.supabaseClient.from(this.table).select()
     if (lastCheckpoint && lastCheckpoint.modified) {
       // Construct the PostgREST query for the following condition:
@@ -188,14 +181,9 @@ export class SupabaseReplication<RxDocType> extends RxReplicationState<
       const lastPrimaryKey = JSON.stringify(lastCheckpoint.primaryKeyValue) // TODO: Add test for a integer primary key
       const isNewer = `${this.lastModifiedFieldName}.gt.${lastModified}`
       const isSameAge = `${this.lastModifiedFieldName}.eq.${lastModified}`
-      query = query.or(
-        `${isNewer},and(${isSameAge},${this.primaryKey}.gt.${lastPrimaryKey})`
-      )
+      query = query.or(`${isNewer},and(${isSameAge},${this.primaryKey}.gt.${lastPrimaryKey})`)
     }
-    query = query
-      .order(this.lastModifiedFieldName)
-      .order(this.primaryKey)
-      .limit(batchSize)
+    query = query.order(this.lastModifiedFieldName).order(this.primaryKey).limit(batchSize)
     //console.debug("Pulling changes since", lastCheckpoint?.modified, "with query", (query as any)['url'].toString())
 
     const { data, error } = await query
@@ -230,12 +218,8 @@ export class SupabaseReplication<RxDocType> extends RxReplicationState<
   /**
    * Tries to insert a new row. Returns the current state of the row in case of a conflict.
    */
-  private async handleInsertion(
-    doc: WithDeleted<RxDocType>
-  ): Promise<WithDeleted<RxDocType>[]> {
-    const { error } = await this.options.supabaseClient
-      .from(this.table)
-      .insert(doc)
+  private async handleInsertion(doc: WithDeleted<RxDocType>): Promise<WithDeleted<RxDocType>[]> {
+    const { error } = await this.options.supabaseClient.from(this.table).insert(doc)
     if (!error) {
       return [] // Success :)
     } else if (error.code == POSTGRES_DUPLICATE_KEY_ERROR_CODE) {
@@ -253,15 +237,10 @@ export class SupabaseReplication<RxDocType> extends RxReplicationState<
   private async handleUpdate(
     row: RxReplicationWriteToMasterRow<RxDocType>
   ): Promise<WithDeleted<RxDocType>[]> {
-    const updateHandler =
-      this.options.push?.updateHandler || this.defaultUpdateHandler.bind(this)
+    const updateHandler = this.options.push?.updateHandler || this.defaultUpdateHandler.bind(this)
     if (await updateHandler(row)) return [] // Success :)
     // Fetch current state and let conflict handler resolve it.
-    return [
-      await this.fetchByPrimaryKey(
-        (row.newDocumentState as any)[this.primaryKey]
-      ),
-    ]
+    return [await this.fetchByPrimaryKey((row.newDocumentState as any)[this.primaryKey])]
   }
 
   /**
@@ -291,24 +270,18 @@ export class SupabaseReplication<RxDocType> extends RxReplicationState<
   private watchPostgresChanges() {
     this.realtimeChannel = this.options.supabaseClient
       .channel("any")
-      .on(
-        "postgres_changes",
-        { event: "*", schema: "public", table: this.table },
-        (payload) => {
-          if (payload.eventType === "DELETE" || !payload.new) return // Should have set _deleted field already
-          //console.debug('Realtime event received:', payload)
-          this.realtimeChanges.next({
-            checkpoint: this.rowToCheckpoint(payload.new),
-            documents: [this.rowToRxDoc(payload.new)],
-          })
-        }
-      )
+      .on("postgres_changes", { event: "*", schema: "public", table: this.table }, (payload) => {
+        if (payload.eventType === "DELETE" || !payload.new) return // Should have set _deleted field already
+        //console.debug('Realtime event received:', payload)
+        this.realtimeChanges.next({
+          checkpoint: this.rowToCheckpoint(payload.new),
+          documents: [this.rowToRxDoc(payload.new)],
+        })
+      })
       .subscribe()
   }
 
-  private async fetchByPrimaryKey(
-    primaryKeyValue: any
-  ): Promise<WithDeleted<RxDocType>> {
+  private async fetchByPrimaryKey(primaryKeyValue: any): Promise<WithDeleted<RxDocType>> {
     const { data, error } = await this.options.supabaseClient
       .from(this.table)
       .select()

@@ -7,20 +7,9 @@ import {
 } from "@supabase/supabase-js"
 import { expect, vi } from "vitest"
 import { Response, RequestInfo, RequestInit } from "node-fetch"
-import {
-  anyFunction,
-  anyString,
-  anything,
-  instance,
-  mock,
-  verify,
-  when,
-} from "ts-mockito"
+import { anyFunction, anyString, anything, instance, mock, verify, when } from "ts-mockito"
 
-type RequestCheck = (
-  input: URL | RequestInfo,
-  options?: RequestInit | undefined
-) => void
+type RequestCheck = (input: URL | RequestInfo, options?: RequestInit | undefined) => void
 
 interface ExpectedFetch {
   name: string
@@ -71,13 +60,10 @@ export class SupabaseBackendMock {
         httpCode: number = 409,
         message: string = "Test error message"
       ) => {
-        const response = new Response(
-          JSON.stringify({ code: errorCode, message }),
-          {
-            status: httpCode,
-            statusText: "ERROR",
-          }
-        )
+        const response = new Response(JSON.stringify({ code: errorCode, message }), {
+          status: httpCode,
+          statusText: "ERROR",
+        })
         this.expectedFetches.push({
           name,
           requestCheck,
@@ -100,21 +86,16 @@ export class SupabaseBackendMock {
   ) {
     let expectedUrl = `${this.url}rest/v1/${expected.table}`
     if (expected.params) expectedUrl += `?${expected.params}`
-    return this.expectFetch(
-      name,
-      (input: URL | RequestInfo, options?: RequestInit | undefined) => {
-        // Set custom message to prevent output being truncated
-        expect(options?.method).toEqual(expected.method || "GET")
-        expect(
-          input.toString(),
-          `Expected ${input.toString()} to equal ${expectedUrl}`
-        ).toEqual(expectedUrl)
-        expect(
-          options?.body,
-          `Expected ${options?.body} to equal ${expected.body}`
-        ).toEqual(expected.body)
-      }
-    )
+    return this.expectFetch(name, (input: URL | RequestInfo, options?: RequestInit | undefined) => {
+      // Set custom message to prevent output being truncated
+      expect(options?.method).toEqual(expected.method || "GET")
+      expect(input.toString(), `Expected ${input.toString()} to equal ${expectedUrl}`).toEqual(
+        expectedUrl
+      )
+      expect(options?.body, `Expected ${options?.body} to equal ${expected.body}`).toEqual(
+        expected.body
+      )
+    })
   }
 
   expectInsert(table: string, body: string) {
@@ -132,10 +113,7 @@ export class SupabaseBackendMock {
     ).toEqual([])
   }
 
-  private fetch(
-    input: URL | RequestInfo,
-    options?: RequestInit | undefined
-  ): Promise<Response> {
+  private fetch(input: URL | RequestInfo, options?: RequestInit | undefined): Promise<Response> {
     expect(
       this.expectedFetches,
       `Did not expect any requests. Got ${options?.method} ${input}`
@@ -154,9 +132,7 @@ export class SupabaseBackendMock {
   ) {
     const channelMock = mock(RealtimeChannel)
     let capturedCallback: (payload: RealtimePostgresChangesPayload<T>) => void
-    when(this.realtimeClientMock.channel(topic, anything())).thenReturn(
-      instance(channelMock)
-    )
+    when(this.realtimeClientMock.channel(topic, anything())).thenReturn(instance(channelMock))
     when(channelMock.on(anyString(), anything(), anyFunction())).thenCall(
       (
         type,
@@ -173,10 +149,7 @@ export class SupabaseBackendMock {
     when(channelMock.subscribe()).thenReturn(instance(channelMock))
     return {
       next: (event: Partial<RealtimePostgresChangesPayload<T>>) => {
-        expect(
-          capturedCallback,
-          "Expected realtime subscription did not happen"
-        ).toBeTruthy()
+        expect(capturedCallback, "Expected realtime subscription did not happen").toBeTruthy()
         capturedCallback(event as RealtimePostgresChangesPayload<T>)
       },
       verifyUnsubscribed: verify(channelMock.unsubscribe()),

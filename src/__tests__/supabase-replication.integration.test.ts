@@ -38,10 +38,7 @@ describe.skipIf(!process.env.TEST_SUPABASE_URL)(
     let collection: RxCollection<Human>
 
     beforeAll(() => {
-      supabase = createClient(
-        process.env.TEST_SUPABASE_URL!,
-        process.env.TEST_SUPABASE_API_KEY!
-      )
+      supabase = createClient(process.env.TEST_SUPABASE_URL!, process.env.TEST_SUPABASE_API_KEY!)
       addRxPlugin(RxDBDevModePlugin)
     })
 
@@ -66,9 +63,7 @@ describe.skipIf(!process.env.TEST_SUPABASE_URL)(
         // TODO: remove explicit null, should be set by pull anyways
         await collection.insert({ id: "1", name: "Alice", age: null })
       })
-      expect(await rxdbContents()).toEqual([
-        { id: "1", name: "Alice", age: null },
-      ])
+      expect(await rxdbContents()).toEqual([{ id: "1", name: "Alice", age: null }])
       expect(await supabaseContents()).toEqual([
         { id: "1", name: "Alice", age: null, _deleted: false },
       ])
@@ -110,9 +105,7 @@ describe.skipIf(!process.env.TEST_SUPABASE_URL)(
           it("invokes conflict handler", async () => {
             collection.conflictHandler = resolveConflictWithName("Bob resolved")
 
-            await supabase
-              .from("humans")
-              .insert({ id: "2", name: "Bob remote" })
+            await supabase.from("humans").insert({ id: "2", name: "Bob remote" })
             await collection.insert({ id: "2", name: "Bob local", age: 42 })
             await replication()
 
@@ -193,9 +186,7 @@ describe.skipIf(!process.env.TEST_SUPABASE_URL)(
         describe("with default conflict handler", () => {
           it("applies supabase changes", async () => {
             await replication()
-            expect(await rxdbContents()).toEqual([
-              { id: "1", name: "Alex", age: null },
-            ])
+            expect(await rxdbContents()).toEqual([{ id: "1", name: "Alex", age: null }])
             expect(await supabaseContents()).toEqual([
               { id: "1", name: "Alex", age: null, _deleted: false },
             ])
@@ -204,12 +195,9 @@ describe.skipIf(!process.env.TEST_SUPABASE_URL)(
 
         describe("with custom conflict handler", () => {
           it("invokes conflict handler", async () => {
-            collection.conflictHandler =
-              resolveConflictWithName("Conflict resolved")
+            collection.conflictHandler = resolveConflictWithName("Conflict resolved")
             await replication()
-            expect(await rxdbContents()).toEqual([
-              { id: "1", name: "Conflict resolved", age: 42 },
-            ])
+            expect(await rxdbContents()).toEqual([{ id: "1", name: "Conflict resolved", age: 42 }])
             expect(await supabaseContents()).toEqual([
               { id: "1", name: "Conflict resolved", age: 42, _deleted: false },
             ])
@@ -246,9 +234,7 @@ describe.skipIf(!process.env.TEST_SUPABASE_URL)(
         await supabase.from("humans").update({ age: 42 }).eq("id", "1")
         await replication()
 
-        expect(await rxdbContents()).toEqual([
-          { id: "1", name: "Alice", age: 42 },
-        ])
+        expect(await rxdbContents()).toEqual([{ id: "1", name: "Alice", age: 42 }])
       })
 
       it("removes rows marked as deleted", async () => {
@@ -262,9 +248,7 @@ describe.skipIf(!process.env.TEST_SUPABASE_URL)(
         await supabase.from("humans").delete().eq("id", "1")
         await replication()
 
-        expect(await rxdbContents()).toEqual([
-          { id: "1", name: "Alice", age: null },
-        ])
+        expect(await rxdbContents()).toEqual([{ id: "1", name: "Alice", age: null }])
       })
     })
 
@@ -272,31 +256,20 @@ describe.skipIf(!process.env.TEST_SUPABASE_URL)(
       describe("without realtime replication", () => {
         it("does not pull new rows", async () => {
           await replication({}, async () => {
-            await supabase
-              .from("humans")
-              .insert({ id: "2", name: "Bob", age: 42 })
-            await new Promise((resolve) =>
-              setTimeout(() => resolve(true), 1000)
-            ) // Wait for some time
+            await supabase.from("humans").insert({ id: "2", name: "Bob", age: 42 })
+            await new Promise((resolve) => setTimeout(() => resolve(true), 1000)) // Wait for some time
           })
 
-          expect(await rxdbContents()).toEqual([
-            { id: "1", name: "Alice", age: null },
-          ])
+          expect(await rxdbContents()).toEqual([{ id: "1", name: "Alice", age: null }])
         })
       })
 
       describe("with realtime replication", () => {
         it("pulls new rows", async () => {
-          await replication(
-            { pull: { realtimePostgresChanges: true } },
-            async (replication) => {
-              await supabase
-                .from("humans")
-                .insert({ id: "2", name: "Bob", age: 42 })
-              await lastValueFrom(replication.remoteEvents$.pipe(take(1))) // Wait for remote event
-            }
-          )
+          await replication({ pull: { realtimePostgresChanges: true } }, async (replication) => {
+            await supabase.from("humans").insert({ id: "2", name: "Bob", age: 42 })
+            await lastValueFrom(replication.remoteEvents$.pipe(take(1))) // Wait for remote event
+          })
 
           expect(await rxdbContents()).toEqual([
             { id: "1", name: "Alice", age: null },
@@ -305,48 +278,30 @@ describe.skipIf(!process.env.TEST_SUPABASE_URL)(
         })
 
         it("pulls updated rows", async () => {
-          await replication(
-            { pull: { realtimePostgresChanges: true } },
-            async (replication) => {
-              await supabase.from("humans").update({ age: 42 }).eq("id", "1")
-              await lastValueFrom(replication.remoteEvents$.pipe(take(1))) // Wait for remote event
-            }
-          )
+          await replication({ pull: { realtimePostgresChanges: true } }, async (replication) => {
+            await supabase.from("humans").update({ age: 42 }).eq("id", "1")
+            await lastValueFrom(replication.remoteEvents$.pipe(take(1))) // Wait for remote event
+          })
 
-          expect(await rxdbContents()).toEqual([
-            { id: "1", name: "Alice", age: 42 },
-          ])
+          expect(await rxdbContents()).toEqual([{ id: "1", name: "Alice", age: 42 }])
         })
 
         it("removes rows marked as deleted", async () => {
-          await replication(
-            { pull: { realtimePostgresChanges: true } },
-            async (replication) => {
-              await supabase
-                .from("humans")
-                .update({ _deleted: true })
-                .eq("id", "1")
-              await lastValueFrom(replication.remoteEvents$.pipe(take(1))) // Wait for remote event
-            }
-          )
+          await replication({ pull: { realtimePostgresChanges: true } }, async (replication) => {
+            await supabase.from("humans").update({ _deleted: true }).eq("id", "1")
+            await lastValueFrom(replication.remoteEvents$.pipe(take(1))) // Wait for remote event
+          })
 
           expect(await rxdbContents()).toEqual([])
         })
 
         it("ignores actually deleted rows", async () => {
-          await replication(
-            { pull: { realtimePostgresChanges: true } },
-            async (replication) => {
-              await supabase.from("humans").delete().eq("id", "1")
-              await new Promise((resolve) =>
-                setTimeout(() => resolve(true), 1000)
-              ) // Wait for some time
-            }
-          )
+          await replication({ pull: { realtimePostgresChanges: true } }, async (replication) => {
+            await supabase.from("humans").delete().eq("id", "1")
+            await new Promise((resolve) => setTimeout(() => resolve(true), 1000)) // Wait for some time
+          })
 
-          expect(await rxdbContents()).toEqual([
-            { id: "1", name: "Alice", age: null },
-          ])
+          expect(await rxdbContents()).toEqual([{ id: "1", name: "Alice", age: null }])
         })
       })
     })
@@ -358,11 +313,7 @@ describe.skipIf(!process.env.TEST_SUPABASE_URL)(
       ) => Promise<void> = async () => {},
       expectErrors: boolean = false
     ): Promise<Error[]> => {
-      return withReplication(
-        () => startReplication(options),
-        callback,
-        expectErrors
-      )
+      return withReplication(() => startReplication(options), callback, expectErrors)
     }
 
     let startReplication = (
@@ -388,9 +339,7 @@ describe.skipIf(!process.env.TEST_SUPABASE_URL)(
       }
     }
 
-    let supabaseContents = async (
-      stripModified: boolean = true
-    ): Promise<WithDeleted<Human>[]> => {
+    let supabaseContents = async (stripModified: boolean = true): Promise<WithDeleted<Human>[]> => {
       const { data, error } = await supabase.from("humans").select().order("id")
       if (error) throw error
       if (stripModified) data.forEach((human) => delete human["_modified"])
