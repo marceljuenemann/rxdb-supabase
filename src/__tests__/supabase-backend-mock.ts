@@ -55,11 +55,7 @@ export class SupabaseBackendMock {
           response: Promise.resolve(response),
         })
       },
-      thenReturnError: (
-        errorCode: string,
-        httpCode = 409,
-        message = "Test error message"
-      ) => {
+      thenReturnError: (errorCode: string, httpCode = 409, message = "Test error message") => {
         const response = new Response(JSON.stringify({ code: errorCode, message }), {
           status: httpCode,
           statusText: "ERROR",

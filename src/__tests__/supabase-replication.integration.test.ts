@@ -8,7 +8,8 @@ import {
   RxConflictHandlerInput,
   RxDatabase,
   WithDeleted,
- addRxPlugin } from "rxdb"
+  addRxPlugin,
+} from "rxdb"
 import { RxDBDevModePlugin } from "rxdb/plugins/dev-mode"
 import { RxReplicationState } from "rxdb/plugins/replication"
 import { getRxStorageMemory } from "rxdb/plugins/storage-memory"
