@@ -1,6 +1,6 @@
 {
   "name": "rxdb-supabase",
-  "version": "0.0.0-development",
+  "version": "1.0.0-beta",
   "type": "module",
   "exports": "./build/supabase-replication.js",
   "types": "./build/src/supabase-replication.d.ts",

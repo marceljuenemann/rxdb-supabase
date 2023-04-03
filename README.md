@@ -1,10 +1,11 @@
 TODO:
-* lint,
+* Create GitHub issues
 * README
+* Add LICENSE
 * Release
   * Test webhook
   * Change version
-  * NPM
+  * NPM publish (via workflow?)
   * Make public
   * test in webapp
   * Advertise
@@ -23,6 +24,7 @@ Notes:
 * Only use null collections :)
 
 Future TODO:
+* Fix lint errors
 * Ask rxdb to expose types?
 * Sync only portion of the table (e.g. a where that will hold true for all rows)
   * Could be implemented with a callback passed in options
