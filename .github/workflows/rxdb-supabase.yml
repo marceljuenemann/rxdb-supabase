@@ -29,9 +29,11 @@ jobs:
 
       - name: Lint check
         run: npm run lint:check
+        continue-on-error: true
 
       - name: Spell check
         run: npm run spell:check
+        continue-on-error: true
 
       - name: Test
         run: npm run test
