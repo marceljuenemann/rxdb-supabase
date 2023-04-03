@@ -10,14 +10,6 @@ Post-release
 * Push only mode
 * Batch insertion
 
-Notes:
-* JSON fields not supported, need to write your own updateHandler
-* Replication ID and the problem around auth / user changes (maybe not really a problem)
-* _modified column (if pull is used)
-* _deleted column
-  * Refer to cleanup plugin. TODO: Will that replicate though, no?
-  * TODO: allow to set to null for push-only mode, in which case we don't store it
-* Only use null collections :)
 
 Future TODO:
 * Fix lint errors

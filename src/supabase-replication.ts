@@ -58,7 +58,7 @@ export type SupabaseReplicationOptions<RxDocType> = {
      * to work and can easily be implemented with moddatetime in supabase.
      * @default '_modified'
      */
-    lastModifiedFieldName?: string
+    lastModifiedField?: string
   }
 
   /**
@@ -140,7 +140,7 @@ export class SupabaseReplication<RxDocType> extends RxReplicationState<
     this.realtimeChanges = realtimeChanges
     this.table = options.table || options.collection.name
     this.primaryKey = options.primaryKey || options.collection.schema.primaryPath
-    this.lastModifiedFieldName = options.pull?.lastModifiedFieldName || DEFAULT_LAST_MODIFIED_FIELD
+    this.lastModifiedFieldName = options.pull?.lastModifiedField || DEFAULT_LAST_MODIFIED_FIELD
 
     if (this.autoStart) {
       this.start()

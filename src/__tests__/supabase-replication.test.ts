@@ -98,7 +98,7 @@ describe.skipIf(process.env.INTEGRATION_TEST)("replicateSupabase", () => {
             pull: {
               initialCheckpoint: checkpoint,
               realtimePostgresChanges: false,
-              lastModifiedFieldName: "myfield",
+              lastModifiedField: "myfield",
             },
           })
 
