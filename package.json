@@ -1,6 +1,17 @@
 {
   "name": "rxdb-supabase",
   "version": "1.0.0",
+  "description": "Offline support for Supabase using RxDB, an offline-first database",
+  "keywords": ["rxdb", "supabase", "offline", "replication", "sync"],
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/marceljuenemann/rxdb-supabase.git"
+  },
+  "author": {
+    "name" : "Marcel Juenemann",
+    "email" : "rxdb-supabase@marcel.world",
+    "url" : "https://marcel.world/"
+  },
   "type": "module",
   "exports": "./build/supabase-replication.js",
   "types": "./build/src/supabase-replication.d.ts",

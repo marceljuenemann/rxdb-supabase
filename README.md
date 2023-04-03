@@ -289,15 +289,11 @@ These are all the available options, including the options inherited from RxDB.
 
 ## Future work
 
-TOOO: add issues
+While the offline-first paradigm comes with [many advantages](https://rxdb.info/offline-first.html), there are also [downsides](https://rxdb.info/downsides-of-offline-first.html), most notably that the entire table needs to be downloaded to the client. Here are a few ideas for how this project could mitigate that:
 
-  * TODO: allow to set to null for push-only mode, in which case we don't store it
-* Only use null collections :)
-
-* Limitations
-  * Offline-first 
-  * _modified and _deleted
-  * Link to ideas
+* Support "partitions", i.e. replicating subsets of the Supabase table, similar to subcollections in FireStore [#4](https://github.com/marceljuenemann/rxdb-supabase/issues/4)
+* Add better support for a "push-only" replication [#5](https://github.com/marceljuenemann/rxdb-supabase/issues/5)
+* Support using RxDB as a offline cache rather than a offline-first database [#6](https://github.com/marceljuenemann/rxdb-supabase/issues/6)
 
 
 ## Development 
