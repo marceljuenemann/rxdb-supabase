@@ -144,72 +144,171 @@ To ensure you don't miss any changes in Supabase, you might want to listen to th
 client gets back online.
 
 
-* Options
-* Notes
+## Options
+
+These are all the available options, including the options inherited from RxDB.
+
+```typescript
+  /**
+   * The RxDB collection to replicate.
+   */
+  collection: RxCollection<RxDocType, any, any, any>
+
+  /**
+   * The SupabaseClient to replicate with.
+   */
+  supabaseClient: SupabaseClient
+
+  /**
+   * The table to replicate to, if different from the name of the collection.
+   * @default the name of the RxDB collection.
+   */
+  table?: string
+
+  /**
+   * The primary key of the supabase table, if different from the primary key of the RxDB.
+   * @default the primary key of the RxDB collection
+   */
+  primaryKey?: string
+
+  /**
+   * Options for pulling data from supabase. Set to {} to pull with the default
+   * options, as no data will be pulled if the field is absent.
+   */
+  pull?: {
+    /**
+     * Whether to subscribe to realtime Postgres changes for the table. If set to false,
+     * only an initial pull will be performed. Only has an effect if the live option is set
+     * to true.
+     * @default true
+     */
+    realtimePostgresChanges?: boolean
+
+    /**
+     * The name of the supabase field that is automatically updated to the last
+     * modified timestamp by postgres. This field is required for the pull sync
+     * to work and can easily be implemented with moddatetime in supabase.
+     * @default '_modified'
+     */
+    lastModifiedField?: string
+
+    /**
+     * Amount of documents to fetch from Supabase in one request.
+     * @default 100
+     */
+    batchSize?: number
+
+    /**
+     * A modifier that runs on all documents that are pulled,
+     * before they are used by RxDB.
+     */
+    modifier?: (docData: any) => Promise<WithDeleted<RxDocType>> | WithDeleted<RxDocType>
+
+    /**
+     * If set, the pull replication will start from the given checkpoint.
+     */
+    initialCheckpoint?: SupabaseReplicationCheckpoint
+  }
+
+  /**
+   * Options for pushing data to supabase. Set to {} to push with the default
+   * options, as no data will be pushed if the field is absent.
+   */
+  push?: {
+    /**
+     * Handler for pushing row updates to supabase. Must return true iff the UPDATE was
+     * applied to the supabase table. Returning false signalises a write conflict, in
+     * which case the current state of the row will be fetched from supabase and passed to
+     * the RxDB collection's conflict handler.
+     * @default the default handler will update the row only iff all fields match the
+     * local state (before the update was applied), otherwise the conflict handler is
+     * invoked. The default handler does not support JSON fields at the moment.
+     */
+    updateHandler?: (row: RxReplicationWriteToMasterRow<RxDocType>) => Promise<boolean>
+
+    /**
+     * A modifier that runs on all pushed documents before they are send to Supabase
+     */
+    modifier?: (docData: WithDeleted<RxDocType>) => Promise<any> | any
+
+    /**
+     * If set, the push replication will start from the given checkpoint.
+     */
+    initialCheckpoint?: SupabaseReplicationCheckpoint
+  }
+
+  /**
+   * An ID for the replication, so that RxDB is able to resume the replication
+   * on app reload. It is recommended to add the supabase URL to make sure you're
+   * not mixing up replications against different databases.
+   * 
+   * If you're using row-level security, you might also want to append the user ID
+   * in case the logged in user changes, although depending on your application you
+   * might want to re-create the entire RxDB from scratch in that case or have one
+   * RxDB per user ID (you could add the user ID to the RxDB name).
+   */
+  replicationIdentifier: string
+
+  /**
+   * The name of the database field to mark a row as deleted.
+   * @default '_deleted'
+   */
+  deletedField?: "_deleted" | string
+
+  /**
+   * By default it will do an ongoing realtime replication.
+   * By settings live: false the replication will run once until the local state
+   * is in sync with the remote state, then it will cancel itself.
+   * @default true
+   */
+  live?: boolean
+
+  /**
+   * Time in milliseconds after which a Supabase request will be retried.
+   * This time will be skipped if a offline->online switch is detected
+   * via `navigator.onLine`
+   * @default 5000
+   */
+  retryTime?: number
+
+  /**
+   * If set to `true`, the replication is started automatically. Otherwise you need
+   * to call `replication.start()` manually.
+   * @default true
+   */
+  autoStart?: boolean
+} 
+```
+
+
+## Notes
+
+* **JSON fields require a custom ```updateHandler```.** This is because the default update handler tries to check that all fields of a row have the expected value, but the supabase client doesn't currently have a simple way to add an equality check for JSON fields.
+* If you delete rows frequently, you might want to enable RxDB's [cleanup plugin](https://rxdb.info/cleanup.html) to clear deleted rows from the local database after they were deleted. There's no recommended way for cleaning up those rows in Supabase yet.
+
+
+## Future work
+
+TOOO: add issues
+
+  * TODO: allow to set to null for push-only mode, in which case we don't store it
+* Only use null collections :)
+
 * Limitations
   * Offline-first 
   * _modified and _deleted
   * Link to ideas
-* Development 
-
-Notes:
-* JSON fields not supported, need to write your own updateHandler
-* Replication ID and the problem around auth / user changes (maybe not really a problem)
-* _modified column (if pull is used)
-* _deleted column
-  * Refer to cleanup plugin
-  * TODO: allow to set to null for push-only mode, in which case we don't store it
-* Only use null collections :)
-
-To run integration tests, set enviornment variables TEST_SUPABASE_URL and TEST_SUPABASE_API_KEY
 
 
-## Features
+## Development 
 
-
-### Typescript
-
-Leverages [esbuild](https://github.com/evanw/esbuild) for blazing fast builds, but keeps `tsc` to generate `.d.ts` files.
-Generates a single ESM build.
-
-Commands:
-
-- `build`: runs typechecking then ESM and `d.ts` files in the `build/` directory
-- `clean`: removes the `build/` directory
-- `type:dts`: only generates `d.ts`
-- `type:check`: only run typechecking
-- `type:build`: only generates ESM
-
-### Tests
-
-typescript-library-starter uses [vitest](https://vitest.dev/). The coverage is done through vitest, using [c8](https://github.com/bcoe/c8).
-
-Commands:
-
-- `test`: runs vitest test runner
-- `test:watch`: runs vitest test runner in watch mode
-- `test:coverage`: runs vitest test runner and generates coverage reports
-
-### Format & lint
-
-This template relies on the combination of [eslint](https://github.com/eslint/eslint) — through [typescript-eslint](https://github.com/typescript-eslint/typescript-eslint) for linting and [prettier](https://github.com/prettier/prettier) for formatting.
-It also uses [cspell](https://github.com/streetsidesoftware/cspell) to ensure spelling
-
-Commands:
-
-- `format`: runs prettier with automatic fixing
-- `format:check`: runs prettier without automatic fixing (used in CI)
-- `lint`: runs eslint with automatic fixing
-- `lint:check`: runs eslint without automatic fixing (used in CI)
-- `spell:check`: runs spellchecking
-
-### Releasing
-
-Under the hood, this library uses [semantic-release](https://github.com/semantic-release/semantic-release) and [commitizen](https://github.com/commitizen/cz-cli).
-The goal is to avoid manual release process. Using `semantic-release` will automatically create a github release (hence tags) as well as an npm release.
-Based on your commit history, `semantic-release` will automatically create a patch, feature or breaking release.
-
-Commands:
-
-- `cz`: interactive CLI that helps you generate a proper git commit message, using [commitizen](https://github.com/commitizen/cz-cli)
-- `semantic-release`: triggers a release (used in CI)
+* **Build:** `npm run build`
+* **Unit tests:** `npm run test` or `npm run test:watch`
+  * TODO: get `npm run test:coverage` to work
+* **Integration tests:** We also run integration tests against a real supabase instance:
+  * Set up a Supabase project and use `src/__tests__humans.sql` to create the table used in tests. It does not use row level security, so that should be disabled for the table.
+  * It requires the environment variables `TEST_SUPABASE_URL` and `TEST_SUPABASE_API_KEY` (the public API key) to be set
+  * `npm run integration-test`
+* **Format code:** `npm run format` (checked as part of the workflow, run for pull requests please :)
+- **Lint:** `npm run lint` (not passing or required for pull requests yet)
+- **Spell check:** `npm run spell:check` (not passing or required for pull requests yet)

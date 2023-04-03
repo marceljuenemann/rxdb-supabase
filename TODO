@@ -9,7 +9,7 @@ TODO:
 Post-release
 * Push only mode
 * Batch insertion
-
+* Don't copy options in README, just use 
 
 Future TODO:
 * Fix lint errors
