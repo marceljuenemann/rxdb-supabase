@@ -4,12 +4,12 @@
 ![NPM](https://img.shields.io/npm/v/rxdb-supabase)
 ![GitHub Workflow Status](https://github.com/marceljuenemann/rxdb-supabase/actions/workflows/rxdb-supabase.yml/badge.svg?branch=main)
 
-[RxDB](https://rxdb.info/) is a client-side, offline-first database that supports various storage layers including IndexedDB. [Supabase](https://supabase.com/) is an open-source Firebase alternative that stores data in a Postgres database with row level security. This library uses RxDB's replication logic to enables a two-way sync of your client-side RxDB database with a remote Supabase table, while allowing you to define custom conflict resolution strategies.
+[RxDB](https://rxdb.info/) is a client-side, offline-first database that supports various storage layers including IndexedDB. [Supabase](https://supabase.com/) is an open-source Firebase alternative that stores data in a Postgres database with row level security. This library uses RxDB's replication logic to enable a two-way sync of your client-side RxDB database with a remote Supabase table, while allowing you to define custom conflict resolution strategies.
 
 
 ## How it works
 
-RxDB is an offline-first database, so all reads and writes are performed against the client-side RxDB database, while it's synced with the corresponding Supabase table in the background. Put another way, you have to store a **full copy of the Supabase table locally** (or more specifically, the subset of rows accessible to the user after row-level security is applied). Everything is configured on a per-table basis though, so you could use RxDB for some tables while only allowing other tables to be queried when the user is online.
+RxDB is an **offline-first database**, so all reads and writes are performed against the client-side RxDB database, which gets synced with the corresponding Supabase table in the background. Put another way, it stores a **full copy of the Supabase table locally** (or more specifically, the subset of rows accessible to the user after row-level security is applied). Everything is configured on a per-table basis though, so you could enable offline support for some tables while querying other tables using the SupabaseClient only when online.
 
 Most of the replication and conflict resolution is handled by RxDB's [replication protocol](https://rxdb.info/replication.html). It works similar to git by always pulling all changes from Supabase before merging changes locally and then pushing them to Supabase. When you start the replication (e.g. when the user opens your web app), these three stages are executed in order:
 
@@ -17,7 +17,7 @@ Most of the replication and conflict resolution is handled by RxDB's [replicatio
     * **`_modified` field:** Your table needs a field with the timestamp of the last modification. This is easy to implement in Supabase, see the Getting Started guide below.
     * **`_deleted` field:** You can't actually delete rows from Supabase unless you are sure all clients have replicated the deletion locally. Instead, you need a boolean field that indicates whether the row has been deleted. You won't have to deal with this on the client-side though, as RxDB will handle this for you transparently.  
 1. **Push changes to Supabase:** Next, we fire INSERT and UPDATE queries to Supabase with all local writes. By default, rows are only updated if they have not changed in the meantime, i.e. all fields of the row need to have the value that they had when the local write was performed. Otherwise, RxDB's conflict handler is invoked, which you can customize to build your own strategy for merging changes.
-1. **Watch Supabase changes in realtime:** After the initial sync is complete, we use Supabase's realtime feature to subscribe to any changes of the table. Note that this will miss any changes if the client is offline intermittendly, so you might want to call `reSync()` on the replication object whenever your app comes back online.
+1. **Watch Supabase changes in realtime:** After the initial sync is complete, we use Supabase's realtime feature to subscribe to any changes of the table. Note that this will miss any changes if the client is offline intermittendly, so you might want to call `reSync()` on the replication object whenever your app comes [back online](https://developer.mozilla.org/en-US/docs/Web/API/Navigator/onLine#listening_for_changes_in_network_status).
 
 
 ## Getting Started
@@ -70,8 +70,8 @@ const myCollections = await db.addCollections({
      * Supabase in the meantime (e.g. by another client), the conflict handler is
      * invoked. By default, RxDB will dismiss the local write and update the local
      * state to match the state in Supabase. With a custom conflict handler you can
-     * implement other strategies, e.g. still perform an update to a single field if
-     * that field didn't change in Supabase in the meantime.
+     * implement other strategies, e.g. you might want to still perform an update
+     * on a per-field basis as long as that field didn't change.
      */
     // conflictHandler: ...
   },
@@ -109,8 +109,9 @@ ALTER TABLE ONLY public.humans ADD CONSTRAINT humans_pkey PRIMARY KEY (id);
 
 Create a trigger that keeps the `_modified` field updated:
 
-```
-CREATE TRIGGER update_modified_datetime BEFORE UPDATE ON public.humans FOR EACH ROW EXECUTE FUNCTION extensions.moddatetime('_modified');
+```sql
+CREATE TRIGGER update_modified_datetime BEFORE UPDATE ON public.humans FOR EACH ROW
+EXECUTE FUNCTION extensions.moddatetime('_modified');
 ```
 
 ### Start the Replication
@@ -289,22 +290,28 @@ These are all the available options, including the options inherited from RxDB.
 
 ## Future work
 
-While the offline-first paradigm comes with [many advantages](https://rxdb.info/offline-first.html), there are also [downsides](https://rxdb.info/downsides-of-offline-first.html), most notably that the entire table needs to be downloaded to the client. Here are a few ideas for how this project could mitigate that:
+While the offline-first paradigm comes with [many advantages](https://rxdb.info/offline-first.html), there are also [downsides](https://rxdb.info/downsides-of-offline-first.html), most notably that the entire table needs to be downloaded to the client. Here are a few ideas for how this project could mitigate that in the future:
 
-* Support "partitions", i.e. replicating subsets of the Supabase table, similar to subcollections in FireStore [#4](https://github.com/marceljuenemann/rxdb-supabase/issues/4)
-* Add better support for a "push-only" replication [#5](https://github.com/marceljuenemann/rxdb-supabase/issues/5)
-* Support using RxDB as a offline cache rather than a offline-first database [#6](https://github.com/marceljuenemann/rxdb-supabase/issues/6)
+* [#4](https://github.com/marceljuenemann/rxdb-supabase/issues/4) Support "partitions", i.e. replicating subsets of the Supabase table, similar to subcollections in FireStore 
+* [#5](https://github.com/marceljuenemann/rxdb-supabase/issues/5) Add better support for a "push-only" mode
+* [#6](https://github.com/marceljuenemann/rxdb-supabase/issues/6) Support using RxDB as a offline cache rather than a offline-first database 
 
 
 ## Development 
 
-* **Build:** `npm run build`
-* **Unit tests:** `npm run test` or `npm run test:watch`
-  * TODO: get `npm run test:coverage` to work
-* **Integration tests:** We also run integration tests against a real supabase instance:
-  * Set up a Supabase project and use `src/__tests__humans.sql` to create the table used in tests. It does not use row level security, so that should be disabled for the table.
-  * It requires the environment variables `TEST_SUPABASE_URL` and `TEST_SUPABASE_API_KEY` (the public API key) to be set
-  * `npm run integration-test`
-* **Format code:** `npm run format` (checked as part of the workflow, run for pull requests please :)
-- **Lint:** `npm run lint` (not passing or required for pull requests yet)
-- **Spell check:** `npm run spell:check` (not passing or required for pull requests yet)
+**Build:** `npm run build`
+
+**Unit tests:** `npm run test` or `npm run test:watch`
+
+**Unit test coverage:** `npm run test:coverage` (Not working yet!)
+
+**Integration tests:** We also run integration tests against a real supabase instance:
+* Set up a Supabase project and use `src/__tests__humans.sql` to create the table used in tests. It does not use row level security, so that should be disabled for the table.
+* It requires the environment variables `TEST_SUPABASE_URL` and `TEST_SUPABASE_API_KEY` (the public API key) to be set
+* `npm run integration-test`
+
+**Format code:** `npm run format` (checked as part of the workflow, run for pull requests please :)
+
+**Lint:** `npm run lint` (not passing or required for pull requests yet)
+
+**Spell check:** `npm run spell:check` (not passing or required for pull requests yet)
