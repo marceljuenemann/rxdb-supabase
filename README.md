@@ -4,6 +4,34 @@
 ![NPM](https://img.shields.io/npm/v/rxdb-supabase)
 ![GitHub Workflow Status](https://github.com/marceljuenemann/rxdb-supabase/actions/workflows/rxdb-supabase.yml/badge.svg?branch=main)
 
+[RxDB](https://rxdb.info/) is a client-side, offline-first database that supports various storage layers including IndexedDB. [Supabase](https://supabase.com/) is an open-source Firebase alternative that stores data in a Postgres database with row level security. This library uses RxDB's replication logic to enables a two-way sync of your client-side RxDB database with a remote Supabase table, while allowing you to define custom conflict resolution strategies.
+
+## How it works
+
+RxDB is an offline-first database, so all reads and writes are performed against the client-side RxDB database, while it's synced with the corresponding Supabase table in the background. Put another way, you have to store a **full copy of the Supabase table locally** (or more specifically, the subset of rows accessible to the user after row-level security is applied). Everything is configured on a per-table basis though, so you could use RxDB for some tables while only allowing other tables to be queried when the user is online.
+
+Most of the replication and conflict resolution is handled by RxDB's [replication protocol](https://rxdb.info/replication.html). It works similar to git by always pulling all changes from Supabase before merging changes locally and then pushing them to Supabase. When you start the replication (e.g. when the user opens your web app), these three stages are executed in order:
+
+1. **Pull changes from Supabase:** As the Supabase table might have been changed since the last sync (e.g. by other clients), we need to fetch all rows that were modified in the meantime. In order for this to be possible with Supabase, some restrictions apply to the table you want to sync:
+    * **`_modified` field:** Your table needs a field with the timestamp of the last modification. This is easy to implement in Supabase, see the Getting Started guide below.
+    * **`_deleted` field:** You can't actually delete rows from Supabase unless you are sure all clients have replicated the deletion locally. Instead, you need a boolean field that indicates whether the row has been deleted. You won't have to deal with this on the client-side though, as RxDB will handle this for you transparently.  
+1. **Push changes to Supabase:** Next, we fire INSERT and UPDATE queries to Supabase with all local writes. By default, rows are only updated if they have not changed in the meantime. If they did change, RxDB's conflict handler is invoked, which you can customize to build your own strategy for merging changes.
+1. **Watch Supabase changes in realtime:** After the initial sync is complete, we use Supabase's realtime feature to subscribe to any changes of the table. Note that this will miss any changes if the client is offline intermittendly, so you might want to call `reSync()` on the replication object when your app comes back online.
+
+
+
+
+
+* Getting started
+* Limitations
+  * Offline-first 
+  * _modified and _deleted
+  * Link to ideas
+* Custom conflict resolution
+* Options
+* Development 
+
+
 
 
 

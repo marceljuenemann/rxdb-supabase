@@ -1,8 +1,6 @@
 TODO:
 * Create GitHub issues
 * README
-* GitHub: build and test
-* GitHub: Run integration test
 * NPM publish (via workflow?)
 * test in webapp
 * Make public

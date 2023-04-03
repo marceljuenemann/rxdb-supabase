@@ -38,7 +38,7 @@ jobs:
       - name: Tests
         run: npm run test
 
-      - name: Integreation Tests
+      - name: Integration Tests
         run: npm run integration-test
         env:
           TEST_SUPABASE_URL: ${{ secrets.TEST_SUPABASE_URL }}
