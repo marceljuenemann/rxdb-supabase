@@ -1,3 +1,10 @@
+# rxdb-supabase: Offline Support for Supabase
+
+![NPM](https://img.shields.io/npm/l/rxdb-supabase)
+![NPM](https://img.shields.io/npm/v/rxdb-supabase)
+![GitHub Workflow Status](https://github.com/marceljuenemann/rxdb-supabase/actions/workflows/rxdb-supabase.yml/badge.svg?branch=main)
+
+
 
 
 To run integration tests, set enviornment variables TEST_SUPABASE_URL and TEST_SUPABASE_API_KEY

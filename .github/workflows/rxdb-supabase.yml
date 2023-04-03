@@ -38,6 +38,12 @@ jobs:
       - name: Test
         run: npm run test
 
+      - name: Test
+        run: npm run test
+        env:
+          TEST_SUPABASE_URL: ${{ secrets.TEST_SUPABASE_URL }}
+          TEST_SUPABASE_API_KEY: ${{ secrets.TEST_SUPABASE_API_KEY }}
+
 #      - name: Release
 #        env:
 #          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
