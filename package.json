@@ -5,10 +5,6 @@
   "exports": "./build/supabase-replication.js",
   "types": "./build/src/supabase-replication.d.ts",
   "license": "MIT",
-  "engines": {
-    "node": "^16.15.0",
-    "npm": "^8.19.2"
-  },
   "volta": {
     "node": "16.15.0",
     "npm": "8.19.2"
@@ -30,6 +26,8 @@
     "test:watch": "vitest watch",
     "test:coverage": "vitest run --coverage",
     "test:setup": "tsx ./scripts/test-setup.ts",
+    "integration-test": "INTEGRATION_TEST=1 vitest run",
+    "integration-test:watch": "INTEGRATION_TEST=1 vitest watch",
     "spell:check": "cspell \"{README.md,CODE_OF_CONDUCT.md,CONTRIBUTING.md,.github/*.md,src/**/*.ts}\"",
     "cz": "cz",
     "semantic-release": "semantic-release"

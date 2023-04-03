@@ -35,11 +35,11 @@ jobs:
         run: npm run spell:check
         continue-on-error: true
 
-      - name: Test
+      - name: Tests
         run: npm run test
 
-      - name: Test
-        run: npm run test
+      - name: Integreation Tests
+        run: npm run integration-test
         env:
           TEST_SUPABASE_URL: ${{ secrets.TEST_SUPABASE_URL }}
           TEST_SUPABASE_API_KEY: ${{ secrets.TEST_SUPABASE_API_KEY }}

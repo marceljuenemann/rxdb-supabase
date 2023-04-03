@@ -18,7 +18,7 @@ import { SupabaseBackendMock } from "./supabase-backend-mock.js"
 import { Human, HumanRow, HUMAN_SCHEMA } from "./test-types.js"
 import { withReplication, resolveConflictWithName } from "./test-utils.js"
 
-describe.skipIf(process.env.TEST_SUPABASE_URL)("replicateSupabase", () => {
+describe.skipIf(process.env.INTEGRATION_TEST)("replicateSupabase", () => {
   let supabaseMock: SupabaseBackendMock
   let db: RxDatabase
   let collection: RxCollection<Human>

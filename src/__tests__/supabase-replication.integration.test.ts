@@ -30,7 +30,7 @@ import { withReplication } from "./test-utils.js"
  * variables are present. It requires a "humans" table to be created, see humans.sql for
  * the table structure.
  */
-describe.skipIf(!process.env.TEST_SUPABASE_URL)(
+describe.skipIf(!process.env.INTEGRATION_TEST)(
   "replicateSupabase with actual SupabaseClient",
   () => {
     let supabase: SupabaseClient
