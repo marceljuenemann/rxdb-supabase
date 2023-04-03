@@ -5,9 +5,13 @@
   "exports": "./build/supabase-replication.js",
   "types": "./build/src/supabase-replication.d.ts",
   "license": "MIT",
+  "engines": {
+    "node": "^18.15.0",
+    "npm": "^9.5.0"
+  },
   "volta": {
-    "node": "16.15.0",
-    "npm": "8.19.2"
+    "node": "18.15.0",
+    "npm": "9.5.0"
   },
   "publishConfig": {
     "access": "public"
