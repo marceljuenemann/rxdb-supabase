@@ -1,3 +1,4 @@
+import { RealtimePostgresChangesPayload } from "@supabase/realtime-js"
 import {
   addRxPlugin,
   createRxDatabase,
@@ -512,10 +513,19 @@ describe.skipIf(process.env.INTEGRATION_TEST)("replicateSupabase", () => {
   })
 
   describe("with realtime enabled", () => {
+    let realtimeSubscription: {
+      verifyUnsubscribed: any
+      next: (event: Partial<RealtimePostgresChangesPayload<HumanRow>>) => any
+    }
+
+    beforeEach(() => {
+      const topic = "rxdb-supabase-test"
+      realtimeSubscription = supabaseMock.expectRealtimeSubscription("humans", topic)
+    })
+
     describe("without events received", () => {
       it("subscribes to and unsubscribes from RealtimeChannel", async () => {
         expectPull().thenReturn([])
-        const realtimeSubscription = supabaseMock.expectRealtimeSubscription("humans")
         await replication({ pull: { realtimePostgresChanges: true } }, async () => {
           realtimeSubscription.verifyUnsubscribed.never()
         })
@@ -526,7 +536,6 @@ describe.skipIf(process.env.INTEGRATION_TEST)("replicateSupabase", () => {
     describe("with insert event received", () => {
       it("inserts new row locally", async () => {
         expectPull().thenReturn([])
-        const realtimeSubscription = supabaseMock.expectRealtimeSubscription<HumanRow>("humans")
         await replication({ pull: { realtimePostgresChanges: true } }, async () => {
           realtimeSubscription.next({
             eventType: "INSERT",
@@ -546,7 +555,6 @@ describe.skipIf(process.env.INTEGRATION_TEST)("replicateSupabase", () => {
     describe("with multiple realtime events received", () => {
       it("updates local state", async () => {
         expectPull().thenReturn([])
-        const realtimeSubscription = supabaseMock.expectRealtimeSubscription<HumanRow>("humans")
         await replication({ pull: { realtimePostgresChanges: true } }, async () => {
           realtimeSubscription.next({
             eventType: "INSERT",
@@ -599,7 +607,6 @@ describe.skipIf(process.env.INTEGRATION_TEST)("replicateSupabase", () => {
     describe("with DELETE event received", () => {
       it("ignores event", async () => {
         expectPull().thenReturn([])
-        const realtimeSubscription = supabaseMock.expectRealtimeSubscription<HumanRow>("humans")
         await replication({ pull: { realtimePostgresChanges: true } }, async () => {
           realtimeSubscription.next({
             eventType: "INSERT",

@@ -122,9 +122,9 @@ export class SupabaseBackendMock {
 
   expectRealtimeSubscription<T extends Record<string, any>>(
     table: string,
+    topic: string,
     event = "*",
-    schema = "public",
-    topic = "any"
+    schema = "public"
   ) {
     const channelMock = mock(RealtimeChannel)
     let capturedCallback: (payload: RealtimePostgresChangesPayload<T>) => void
