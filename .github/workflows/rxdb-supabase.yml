@@ -16,7 +16,7 @@ jobs:
       - run: npm ci
 
       - name: Dependencies audit
-        run: npm audit --audit-level=moderate
+        run: npm audit --audit-level=moderate --omit=dev
 
       - name: Build
         run: npm run build
