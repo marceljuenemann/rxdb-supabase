@@ -1,17 +1,15 @@
 import { RealtimeChannel, SupabaseClient } from "@supabase/supabase-js"
 import {
+  ReplicationOptions,
   ReplicationPullHandlerResult,
+  ReplicationPullOptions,
+  ReplicationPushOptions,
   RxReplicationPullStreamItem,
   RxReplicationWriteToMasterRow,
   WithDeleted,
 } from "rxdb"
 import { RxReplicationState } from "rxdb/plugins/replication"
 import { Subject } from "rxjs"
-import {
-  ReplicationOptions,
-  ReplicationPullOptions,
-  ReplicationPushOptions,
-} from "./rxdb-internal-types.js"
 
 const DEFAULT_LAST_MODIFIED_FIELD = "_modified"
 const DEFAULT_DELETED_FIELD = "_deleted"

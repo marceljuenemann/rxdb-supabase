@@ -49,7 +49,7 @@
   },
   "dependencies": {
     "@supabase/supabase-js": "^2.11.0",
-    "rxdb": "^14.3.6",
+    "rxdb": "^14.6.1",
     "rxjs": "^7.8.0"
   },
   "devDependencies": {
