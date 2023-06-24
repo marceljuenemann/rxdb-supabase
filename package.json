@@ -1,6 +1,6 @@
 {
   "name": "rxdb-supabase",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "description": "Offline support for Supabase using RxDB, an offline-first database",
   "keywords": [
     "rxdb",
