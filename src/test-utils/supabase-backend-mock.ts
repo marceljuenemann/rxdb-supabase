@@ -36,6 +36,9 @@ export class SupabaseBackendMock {
       global: {
         fetch: this.fetch.bind(this),
       },
+      auth: {
+        persistSession: false,
+      },
     })
     const hackedClient = this.client as any
     hackedClient.realtime = instance(this.realtimeClientMock)

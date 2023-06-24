@@ -38,7 +38,9 @@ describe.skipIf(!process.env.INTEGRATION_TEST)(
     let collection: RxCollection<Human>
 
     beforeAll(() => {
-      supabase = createClient(process.env.TEST_SUPABASE_URL!, process.env.TEST_SUPABASE_API_KEY!)
+      supabase = createClient(process.env.TEST_SUPABASE_URL!, process.env.TEST_SUPABASE_API_KEY!, {
+        auth: { persistSession: false },
+      })
       addRxPlugin(RxDBDevModePlugin)
     })
 
