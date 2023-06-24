@@ -20,8 +20,8 @@ import {
   SupabaseReplicationCheckpoint,
   SupabaseReplicationOptions,
 } from "../supabase-replication.js"
-import { Human, HUMAN_SCHEMA } from "./test-types.js"
-import { withReplication } from "./test-utils.js"
+import { Human, HUMAN_SCHEMA } from "../test-utils/test-types.js"
+import { withReplication } from "../test-utils/test-utils.js"
 
 /**
  * Integration test running against an actual Supabase instance.

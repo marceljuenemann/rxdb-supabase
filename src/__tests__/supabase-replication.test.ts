@@ -14,9 +14,9 @@ import {
   SupabaseReplicationCheckpoint,
   SupabaseReplicationOptions,
 } from "../supabase-replication.js"
-import { SupabaseBackendMock } from "./supabase-backend-mock.js"
-import { Human, HumanRow, HUMAN_SCHEMA } from "./test-types.js"
-import { withReplication, resolveConflictWithName } from "./test-utils.js"
+import { SupabaseBackendMock } from "../test-utils/supabase-backend-mock.js"
+import { Human, HumanRow, HUMAN_SCHEMA } from "../test-utils/test-types.js"
+import { withReplication, resolveConflictWithName } from "../test-utils/test-utils.js"
 
 describe.skipIf(process.env.INTEGRATION_TEST)("replicateSupabase", () => {
   let supabaseMock: SupabaseBackendMock
