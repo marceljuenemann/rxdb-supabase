@@ -2,15 +2,21 @@
   "name": "rxdb-supabase",
   "version": "1.0.0",
   "description": "Offline support for Supabase using RxDB, an offline-first database",
-  "keywords": ["rxdb", "supabase", "offline", "replication", "sync"],
+  "keywords": [
+    "rxdb",
+    "supabase",
+    "offline",
+    "replication",
+    "sync"
+  ],
   "repository": {
     "type": "git",
     "url": "https://github.com/marceljuenemann/rxdb-supabase.git"
   },
   "author": {
-    "name" : "Marcel Juenemann",
-    "email" : "rxdb-supabase@marcel.world",
-    "url" : "https://marcel.world/"
+    "name": "Marcel Juenemann",
+    "email": "rxdb-supabase@marcel.world",
+    "url": "https://marcel.world/"
   },
   "type": "module",
   "exports": "./build/supabase-replication.js",
@@ -58,16 +64,16 @@
     "@types/prompts": "^2.4.3",
     "@typescript-eslint/eslint-plugin": "^5.55.0",
     "@typescript-eslint/parser": "^5.55.0",
-    "c8": "^7.13.0",
-    "cspell": "^6.29.3",
+    "c8": "^5.0.2",
+    "cspell": "^4.0.23",
     "esbuild": "^0.17.11",
     "eslint": "^8.36.0",
     "eslint-config-prettier": "^8.7.0",
     "eslint-import-resolver-typescript": "^3.5.3",
     "eslint-plugin-eslint-comments": "^3.2.0",
-    "eslint-plugin-import": "^2.27.5",
+    "eslint-plugin-import": "^2.26.0",
     "node-fetch": "^3.3.1",
-    "nyc": "^15.1.0",
+    "nyc": "^13.3.0",
     "prettier": "^2.8.4",
     "source-map-support": "^0.5.21",
     "ts-mockito": "^2.6.1",
