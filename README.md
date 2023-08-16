@@ -311,4 +311,14 @@ While the offline-first paradigm comes with [many advantages](https://rxdb.info/
 
 **Spell check:** `npm run spell:check` (not passing or required for pull requests yet)
 
-**Deploy release:** `npm publish` (remember to run `npm run build` and tests first)
+**Release checklist:**
+
+- Bump version
+- Update dependencies (`ncu -u`)
+- `npm i`
+- Build & Test
+- `npm publish`
+- Commit
+- Create GitHub release
+
+_TODO: Set up semantic-releases workflow_
