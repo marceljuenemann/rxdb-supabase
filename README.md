@@ -314,6 +314,7 @@ While the offline-first paradigm comes with [many advantages](https://rxdb.info/
 **Release checklist:**
 
 - Bump version
+- Update `CHANGELOG.md`
 - Update dependencies (`ncu -u`)
 - `npm i`
 - Build, test, format
