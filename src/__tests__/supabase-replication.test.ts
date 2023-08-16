@@ -257,7 +257,7 @@ describe.skipIf(process.env.INTEGRATION_TEST)("replicateSupabase", () => {
         expectPull().thenReturn([])
         expectInsert('{"id":"1","name":"Alice","age":null,"_deleted":false}').thenReturnError(
           "53000",
-          503
+          503,
         )
         expectInsert('{"id":"1","name":"Alice","age":null,"_deleted":false}').thenReturn()
 
@@ -272,7 +272,7 @@ describe.skipIf(process.env.INTEGRATION_TEST)("replicateSupabase", () => {
         await collection.insert({ id: "1", name: "Local Alice", age: null })
         expectPull().thenReturn([])
         expectInsert('{"id":"1","name":"Local Alice","age":null,"_deleted":false}').thenReturnError(
-          "23505"
+          "23505",
         )
         // Should fetch current state on duplicate key error...
         expectSelectById("1").thenReturn([
@@ -309,7 +309,7 @@ describe.skipIf(process.env.INTEGRATION_TEST)("replicateSupabase", () => {
         })
         expectPull().thenReturn([])
         expectInsert(
-          '{"id":"1","name":"Robert \\"Bob\\" Simpson","age":null,"_deleted":false}'
+          '{"id":"1","name":"Robert \\"Bob\\" Simpson","age":null,"_deleted":false}',
         ).thenReturn()
 
         await replication({}, async (replication) => {
@@ -381,7 +381,7 @@ describe.skipIf(process.env.INTEGRATION_TEST)("replicateSupabase", () => {
             { push: { updateHandler: () => Promise.resolve(true) } },
             async (replication) => {
               await doc.patch({ name: "Alice local", age: 42 })
-            }
+            },
           )
 
           expect(await rxdbContents()).toEqual([{ id: "1", name: "Alice local", age: 42 }])
@@ -392,7 +392,7 @@ describe.skipIf(process.env.INTEGRATION_TEST)("replicateSupabase", () => {
         it("invokes conflict handler and updates again", async () => {
           let callCount = 0
           const customUpdateHandler = (
-            row: RxReplicationWriteToMasterRow<Human>
+            row: RxReplicationWriteToMasterRow<Human>,
           ): Promise<boolean> => {
             callCount++
             // Only return true (i.e. successful update) if we already fetched the updated state
@@ -413,7 +413,7 @@ describe.skipIf(process.env.INTEGRATION_TEST)("replicateSupabase", () => {
             async (replication) => {
               expectSelectById("1").thenReturn([{ id: "1", name: "Alice remote", age: 54 }])
               await doc.patch({ name: "Alice local", age: 42 })
-            }
+            },
           )
 
           expect(callCount).toEqual(2)
@@ -449,7 +449,7 @@ describe.skipIf(process.env.INTEGRATION_TEST)("replicateSupabase", () => {
               .thenReturn({}, { "Content-Range": "0-1/1" })
             await collection.upsert({ id: "1", name: "Alice 2", age: 42 })
           },
-          true
+          true,
         )
         expect(errors).toHaveLength(1)
       })
@@ -637,15 +637,15 @@ describe.skipIf(process.env.INTEGRATION_TEST)("replicateSupabase", () => {
   const replication = (
     options: Partial<SupabaseReplicationOptions<Human>> = {},
     callback: (
-      state: RxReplicationState<Human, SupabaseReplicationCheckpoint>
+      state: RxReplicationState<Human, SupabaseReplicationCheckpoint>,
     ) => Promise<void> = async () => {},
-    expectErrors = false
+    expectErrors = false,
   ): Promise<Error[]> => {
     return withReplication(() => startReplication(options), callback, expectErrors)
   }
 
   const startReplication = (
-    options: Partial<SupabaseReplicationOptions<Human>> = {}
+    options: Partial<SupabaseReplicationOptions<Human>> = {},
   ): SupabaseReplication<Human> => {
     const status = new SupabaseReplication({
       replicationIdentifier: "test",
@@ -666,7 +666,7 @@ describe.skipIf(process.env.INTEGRATION_TEST)("replicateSupabase", () => {
         lastPrimaryKey: string
         modifiedField?: string
       }
-    } = {}
+    } = {},
   ) => {
     // TODO: test double quotes inside a search string
     const modifiedField = options.withFilter?.modifiedField || "_modified"

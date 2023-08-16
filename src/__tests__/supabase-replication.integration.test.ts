@@ -311,15 +311,15 @@ describe.skipIf(!process.env.INTEGRATION_TEST)(
     const replication = (
       options: Partial<SupabaseReplicationOptions<Human>> = {},
       callback: (
-        state: RxReplicationState<Human, SupabaseReplicationCheckpoint>
+        state: RxReplicationState<Human, SupabaseReplicationCheckpoint>,
       ) => Promise<void> = async () => {},
-      expectErrors = false
+      expectErrors = false,
     ): Promise<Error[]> => {
       return withReplication(() => startReplication(options), callback, expectErrors)
     }
 
     const startReplication = (
-      options: Partial<SupabaseReplicationOptions<Human>> = {}
+      options: Partial<SupabaseReplicationOptions<Human>> = {},
     ): SupabaseReplication<Human> => {
       const status = new SupabaseReplication({
         replicationIdentifier: "test",
@@ -356,5 +356,5 @@ describe.skipIf(!process.env.INTEGRATION_TEST)(
     afterEach(async () => {
       await db.remove()
     })
-  }
+  },
 )

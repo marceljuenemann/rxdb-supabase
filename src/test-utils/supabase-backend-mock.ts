@@ -81,7 +81,7 @@ export class SupabaseBackendMock {
 
   expectQuery(
     name: string,
-    expected: { table: string; params?: string; method?: string; body?: string }
+    expected: { table: string; params?: string; method?: string; body?: string },
   ) {
     let expectedUrl = `${this.url}rest/v1/${expected.table}`
     if (expected.params) expectedUrl += `?${expected.params}`
@@ -89,10 +89,10 @@ export class SupabaseBackendMock {
       // Set custom message to prevent output being truncated
       expect(options?.method).toEqual(expected.method || "GET")
       expect(input.toString(), `Expected ${input.toString()} to equal ${expectedUrl}`).toEqual(
-        expectedUrl
+        expectedUrl,
       )
       expect(options?.body, `Expected ${options?.body} to equal ${expected.body}`).toEqual(
-        expected.body
+        expected.body,
       )
     })
   }
@@ -108,14 +108,14 @@ export class SupabaseBackendMock {
   verifyNoMoreQueriesExpected() {
     expect(
       this.expectedFetches.map((exp) => exp.name),
-      "Expected more Supabase calls"
+      "Expected more Supabase calls",
     ).toEqual([])
   }
 
   private fetch(input: URL | RequestInfo, options?: RequestInit | undefined): Promise<Response> {
     expect(
       this.expectedFetches,
-      `Did not expect any requests. Got ${options?.method} ${input}`
+      `Did not expect any requests. Got ${options?.method} ${input}`,
     ).not.toHaveLength(0)
     const expected = this.expectedFetches[0]
     this.expectedFetches = this.expectedFetches.slice(1)
@@ -127,7 +127,7 @@ export class SupabaseBackendMock {
     table: string,
     topic: string,
     event = "*",
-    schema = "public"
+    schema = "public",
   ) {
     const channelMock = mock(RealtimeChannel)
     let capturedCallback: (payload: RealtimePostgresChangesPayload<T>) => void
@@ -136,14 +136,14 @@ export class SupabaseBackendMock {
       (
         type,
         filter: RealtimePostgresChangesFilter<any>,
-        callback: (payload: RealtimePostgresChangesPayload<T>) => void
+        callback: (payload: RealtimePostgresChangesPayload<T>) => void,
       ) => {
         expect(filter.event).toEqual(event)
         expect(filter.table).toEqual(table)
         expect(filter.schema).toEqual(schema)
         capturedCallback = callback
         return instance(channelMock)
-      }
+      },
     )
     when(channelMock.subscribe()).thenReturn(instance(channelMock))
     return {

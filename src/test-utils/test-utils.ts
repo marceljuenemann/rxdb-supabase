@@ -13,9 +13,9 @@ import { Human, HumanRow } from "./test-types.js"
 export async function withReplication(
   replicationFactory: () => SupabaseReplication<Human>,
   callback: (
-    state: RxReplicationState<Human, SupabaseReplicationCheckpoint>
+    state: RxReplicationState<Human, SupabaseReplicationCheckpoint>,
   ) => Promise<void> = async () => {},
-  expectErrors = false
+  expectErrors = false,
 ): Promise<Error[]> {
   return new Promise(async (resolve, reject) => {
     const errors: Error[] = []

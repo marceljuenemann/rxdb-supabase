@@ -316,7 +316,7 @@ While the offline-first paradigm comes with [many advantages](https://rxdb.info/
 - Bump version
 - Update dependencies (`ncu -u`)
 - `npm i`
-- Build & Test
+- Build, test, format
 - `npm publish`
 - Commit
 - Create GitHub release

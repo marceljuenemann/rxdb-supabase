@@ -133,7 +133,7 @@ export class SupabaseReplication<RxDocType> extends RxReplicationState<
       },
       typeof options.live === "undefined" ? true : options.live,
       typeof options.retryTime === "undefined" ? 5000 : options.retryTime,
-      typeof options.autoStart === "undefined" ? true : options.autoStart
+      typeof options.autoStart === "undefined" ? true : options.autoStart,
     )
     this.realtimeChanges = realtimeChanges
     this.table = options.table || options.collection.name
@@ -169,7 +169,7 @@ export class SupabaseReplication<RxDocType> extends RxReplicationState<
    */
   private async pullHandler(
     lastCheckpoint: SupabaseReplicationCheckpoint,
-    batchSize: number
+    batchSize: number,
   ): Promise<ReplicationPullHandlerResult<RxDocType, SupabaseReplicationCheckpoint>> {
     let query = this.options.supabaseClient.from(this.table).select()
     if (lastCheckpoint && lastCheckpoint.modified) {
@@ -203,7 +203,7 @@ export class SupabaseReplication<RxDocType> extends RxReplicationState<
    * Pushes local changes to supabase.
    */
   private async pushHandler(
-    rows: RxReplicationWriteToMasterRow<RxDocType>[]
+    rows: RxReplicationWriteToMasterRow<RxDocType>[],
   ): Promise<WithDeleted<RxDocType>[]> {
     if (rows.length != 1) throw new Error("Invalid batch size")
     const row = rows[0]
@@ -233,7 +233,7 @@ export class SupabaseReplication<RxDocType> extends RxReplicationState<
    * state is fetched and passed to the conflict handler.
    */
   private async handleUpdate(
-    row: RxReplicationWriteToMasterRow<RxDocType>
+    row: RxReplicationWriteToMasterRow<RxDocType>,
   ): Promise<WithDeleted<RxDocType>[]> {
     const updateHandler = this.options.push?.updateHandler || this.defaultUpdateHandler.bind(this)
     if (await updateHandler(row)) return [] // Success :)
@@ -245,7 +245,7 @@ export class SupabaseReplication<RxDocType> extends RxReplicationState<
    * Updates the row only if all database fields match the expected state.
    */
   private async defaultUpdateHandler(
-    row: RxReplicationWriteToMasterRow<RxDocType>
+    row: RxReplicationWriteToMasterRow<RxDocType>,
   ): Promise<boolean> {
     let query = this.options.supabaseClient
       .from(this.table)
