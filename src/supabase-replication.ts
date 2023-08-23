@@ -117,8 +117,15 @@ export class SupabaseReplication<RxDocType> extends RxReplicationState<
     const realtimeChanges = new Subject<
       RxReplicationPullStreamItem<RxDocType, SupabaseReplicationCheckpoint>
     >()
+    const replicationIdentifierHash = options.collection.database.hashFunction(
+      [
+        options.collection.database.name,
+        options.collection.name,
+        options.replicationIdentifier,
+      ].join("|")
+    )
     super(
-      options.replicationIdentifier,
+      replicationIdentifierHash,
       options.collection,
       options.deletedField || DEFAULT_DELETED_FIELD,
       options.pull && {
