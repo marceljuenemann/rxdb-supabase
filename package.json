@@ -19,9 +19,14 @@
     "url": "https://marcel.world/"
   },
   "type": "module",
-  "exports": "./build/supabase-replication.js",
-  "types": "./build/src/supabase-replication.d.ts",
   "license": "MIT",
+  "exports": {
+    ".": {
+      "import": "./build/supabase-replication.js",
+      "require": "./build/supabase-replication.js",
+      "types": "./build/src/supabase-replication.d.ts"
+    }
+  },
   "engines": {
     "node": "^18.15.0",
     "npm": "^9.5.0"
