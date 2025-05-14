@@ -4,6 +4,9 @@
 ![NPM](https://img.shields.io/npm/v/rxdb-supabase)
 ![GitHub Workflow Status](https://github.com/marceljuenemann/rxdb-supabase/actions/workflows/rxdb-supabase.yml/badge.svg?branch=main)
 
+> [!WARNING]  
+> **Currently only RxDB 14 is supported. I'm planning to work on support for RxDB 16 soon!**
+
 [RxDB](https://rxdb.info/) is a client-side, offline-first database that supports various storage layers including IndexedDB. [Supabase](https://supabase.com/) is an open-source Firebase alternative that stores data in a Postgres database with row level security. This library uses RxDB's replication logic to enable a two-way sync of your client-side RxDB database with a remote Supabase table, while allowing you to define custom conflict resolution strategies.
 
 ## How it works
